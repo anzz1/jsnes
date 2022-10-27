@@ -1516,12 +1516,12 @@ Mappers[180].prototype.loadROM = function () {
 };
 
 /**
-			 * Mapper 240
-			 *
-			 * @description https://www.nesdev.org/wiki/INES_Mapper_240
-			 * @example Jing Ke Xin Zhuan,Sheng Huo Lie Zhuan
-			 * @constructor https://blog.heheda.top
-			 */
+* Mapper 240
+ *
+ * @description https://www.nesdev.org/wiki/INES_Mapper_240
+ * @example Jing Ke Xin Zhuan,Sheng Huo Lie Zhuan
+ * @constructor https://blog.heheda.top
+ */
  Mappers[240] = function(nes) {
   this.nes = nes;
 };
@@ -1538,6 +1538,28 @@ Mappers[240].prototype.write = function(address, value) {
 
     // Swap in the given VROM bank at 0x0000:
     this.load8kVromBank((value & 0xf) * 2, 0x0000);
+  }
+};
+
+/**
+ * Mapper 241 (BNROM, NINA-01)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_241
+ * @example 
+ * @constructor https://blog.heheda.top
+ */
+Mappers[241] = function(nes) {
+  this.nes = nes;
+};
+
+Mappers[241].prototype = new Mappers[0]();
+
+Mappers[241].prototype.write = function(address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else {
+    this.load32kRomBank(value, 0x8000);
   }
 };
 

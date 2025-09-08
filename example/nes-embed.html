@@ -17,7 +17,7 @@
 			let label = document.getElementById("label");
 
 			let data = parseInt(window.localStorage.getItem("jsnes-volume"));
-			if (data > 0 && data <= 256) {
+			if (!isNaN(data) && data >= 0 && data < 256) {
 				slider.value = data;
 				label.innerHTML = "&#128266; " + Math.round(data*100/256);
 				nes_volume(data);
@@ -62,7 +62,7 @@
 	<body>
 		<center>
 			<canvas id="nes-canvas" width="256" height="240"></canvas>
-			<p><div><input id="volume" type="range" min="0" max="256" value="256" style="vertical-align: middle;"> <span id="label">&#128263; 0</span>%</div></p>
+			<p><div><input id="volume" type="range" min="0" max="256" value="256" style="vertical-align: middle;"> <span id="label">&#128266; 100</span>%</div></p>
 		</center>
 	</body>
 </html>

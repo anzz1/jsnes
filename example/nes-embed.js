@@ -12,6 +12,7 @@ var SAMPLE_MASK = SAMPLE_COUNT - 1;
 var audio_samples_L = new Float32Array(SAMPLE_COUNT);
 var audio_samples_R = new Float32Array(SAMPLE_COUNT);
 var audio_write_cursor = 0, audio_read_cursor = 0;
+var framecount = 0;
 
 function onAnimationFrame(){
 	window.requestAnimationFrame(onAnimationFrame);
@@ -31,12 +32,15 @@ function audio_callback(event){
 	// Attempt to avoid buffer underruns.
 	if(audio_remain() < AUDIO_BUFFERING) nes.frame();
 
-	var dst_l = dst.getChannelData(0);
-	var dst_r = dst.getChannelData(1);
-	for(var i = 0; i < len; i++){
-		var src_idx = (audio_read_cursor + i) & SAMPLE_MASK;
-		dst_l[i] = audio_samples_L[src_idx];
-		dst_r[i] = audio_samples_R[src_idx];
+	// Avoid audio pop
+	if (framecount++ > 20){
+		var dst_l = dst.getChannelData(0);
+		var dst_r = dst.getChannelData(1);
+		for(var i = 0; i < len; i++){
+			var src_idx = (audio_read_cursor + i) & SAMPLE_MASK;
+			dst_l[i] = audio_samples_L[src_idx];
+			dst_r[i] = audio_samples_R[src_idx];
+		}
 	}
 
 	audio_read_cursor = (audio_read_cursor + len) & SAMPLE_MASK;

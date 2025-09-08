@@ -1241,6 +1241,38 @@ CPU.prototype = {
         if (addrMode !== 11) cycleCount += cycleAdd; // PostIdxInd = 11
         break;
       }
+      case 70: {
+        // *******
+        // * LAE *
+        // *******
+
+        this.REG_ACC = this.REG_X = this.REG_SP = this.load(addr) & this.REG_SP;
+        this.F_SIGN = (this.REG_ACC >> 7) & 1;
+        this.F_ZERO = this.REG_ACC;
+        break;
+      }
+      case 71: {
+        // *******
+        // * ANE *
+        // *******
+
+        // This operation is unstable
+        this.REG_ACC = this.REG_X & this.load(addr);
+        this.F_SIGN = (this.REG_ACC >> 7) & 1;
+        this.F_ZERO = this.REG_ACC;
+        break;
+      }
+      case 72: {
+        // *******
+        // * LXA *
+        // *******
+
+        // This operation is unstable
+        this.REG_ACC = this.REG_X = this.load(addr);
+        this.F_SIGN = (this.REG_ACC >> 7) & 1;
+        this.F_ZERO = this.REG_ACC;
+        break;
+      }
 
       default: {
         // *******
@@ -1639,6 +1671,7 @@ var OpData = function () {
   this.setOp(this.INS_SBC, 0xf9, this.ADDR_ABSY, 3, 4);
   this.setOp(this.INS_SBC, 0xe1, this.ADDR_PREIDXIND, 2, 6);
   this.setOp(this.INS_SBC, 0xf1, this.ADDR_POSTIDXIND, 2, 5);
+  this.setOp(this.INS_SBC, 0xeb, this.ADDR_IMM, 2, 5);
 
   // SEC:
   this.setOp(this.INS_SEC, 0x38, this.ADDR_IMP, 1, 2);
@@ -1774,7 +1807,7 @@ var OpData = function () {
   this.setOp(this.INS_SKB, 0xc2, this.ADDR_IMM, 2, 2);
   this.setOp(this.INS_SKB, 0xe2, this.ADDR_IMM, 2, 2);
 
-  // SKB:
+  // IGN:
   this.setOp(this.INS_IGN, 0x0c, this.ADDR_ABS, 3, 4);
   this.setOp(this.INS_IGN, 0x1c, this.ADDR_ABSX, 3, 4);
   this.setOp(this.INS_IGN, 0x3c, this.ADDR_ABSX, 3, 4);
@@ -1791,6 +1824,15 @@ var OpData = function () {
   this.setOp(this.INS_IGN, 0x74, this.ADDR_ZPX, 2, 4);
   this.setOp(this.INS_IGN, 0xd4, this.ADDR_ZPX, 2, 4);
   this.setOp(this.INS_IGN, 0xf4, this.ADDR_ZPX, 2, 4);
+
+  // LAE:
+  this.setOp(this.INS_LAE, 0xbb, this.ADDR_ABSY, 3, 4);
+
+  // ANE:
+  this.setOp(this.INS_ANE, 0x8b, this.ADDR_IMM, 2, 2);
+
+  // LXA:
+  this.setOp(this.INS_LXA, 0xab, this.ADDR_IMM, 2, 2);
 
   // prettier-ignore
   this.cycTable = new Array(
@@ -1885,6 +1927,9 @@ var OpData = function () {
   this.instname[67] = "SRE";
   this.instname[68] = "SKB";
   this.instname[69] = "IGN";
+  this.instname[70] = "LAE";
+  this.instname[71] = "ANE";
+  this.instname[72] = "LXA";
 
   this.addrDesc = new Array(
     "Zero Page           ",
@@ -1988,8 +2033,11 @@ OpData.prototype = {
   INS_SRE: 67,
   INS_SKB: 68,
   INS_IGN: 69,
+  INS_LAE: 70,
+  INS_ANE: 71,
+  INS_LXA: 72,
 
-  INS_DUMMY: 70, // dummy instruction used for 'halting' the processor some cycles
+  INS_DUMMY: 73, // dummy instruction for 'halting' the processor
 
   // -------------------------------- //
 

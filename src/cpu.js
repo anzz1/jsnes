@@ -1854,7 +1854,7 @@ var OpData = function () {
     /*0xF0*/ 2,5,2,8,4,4,6,6,2,4,2,7,4,4,7,7
   );
 
-  this.instname = new Array(70);
+  this.instname = new Array(73);
 
   // Instruction Names:
   this.instname[0] = "ADC";

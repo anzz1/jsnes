@@ -12,7 +12,6 @@ var SAMPLE_MASK = SAMPLE_COUNT - 1;
 var audio_samples_L = new Float32Array(SAMPLE_COUNT);
 var audio_samples_R = new Float32Array(SAMPLE_COUNT);
 var audio_write_cursor = 0, audio_read_cursor = 0;
-var framecount = 0;
 
 function onAnimationFrame(){
 	window.requestAnimationFrame(onAnimationFrame);
@@ -33,7 +32,7 @@ function audio_callback(event){
 	if(audio_remain() < AUDIO_BUFFERING) nes.frame();
 
 	// Avoid audio pop
-	if (framecount++ > 20){
+	if (nes.frameCount > 20){
 		var dst_l = dst.getChannelData(0);
 		var dst_r = dst.getChannelData(1);
 		for(var i = 0; i < len; i++){

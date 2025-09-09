@@ -47,6 +47,7 @@ var NES = function (opts) {
 };
 
 NES.prototype = {
+  frameCount: 0,
   fpsFrameCount: 0,
   romData: null,
   break: false,
@@ -68,6 +69,7 @@ NES.prototype = {
 
     this.lastFpsTime = null;
     this.fpsFrameCount = 0;
+    this.frameCount = 0;
 
     this.break = false;
   },
@@ -142,6 +144,7 @@ NES.prototype = {
       }
     }
     this.fpsFrameCount++;
+    this.frameCount++;
   },
 
   buttonDown: function (controller, button) {

@@ -12,6 +12,8 @@ var SAMPLE_MASK = SAMPLE_COUNT - 1;
 var audio_samples_L = new Float32Array(SAMPLE_COUNT);
 var audio_samples_R = new Float32Array(SAMPLE_COUNT);
 var audio_write_cursor = 0, audio_read_cursor = 0;
+var audio_lerp_L = 0, audio_lerp_R = 0, audio_lerp_done = false;
+
 
 function onAnimationFrame(){
 	window.requestAnimationFrame(onAnimationFrame);
@@ -31,14 +33,22 @@ function audio_callback(event){
 	// Attempt to avoid buffer underruns.
 	if(audio_remain() < AUDIO_BUFFERING) nes.frame();
 
-	// Avoid audio pop
-	if (nes.frameCount > 20){
-		var dst_l = dst.getChannelData(0);
-		var dst_r = dst.getChannelData(1);
-		for(var i = 0; i < len; i++){
-			var src_idx = (audio_read_cursor + i) & SAMPLE_MASK;
+	var dst_l = dst.getChannelData(0);
+	var dst_r = dst.getChannelData(1);
+	for(var i = 0; i < len; i++){
+		var src_idx = (audio_read_cursor + i) & SAMPLE_MASK;
+
+		// Avoid audio pop
+		if (audio_lerp_done) {
 			dst_l[i] = audio_samples_L[src_idx];
 			dst_r[i] = audio_samples_R[src_idx];
+		} else {
+			dst_l[i] = audio_lerp_L = audio_lerp_L + (audio_samples_L[src_idx] - audio_lerp_L) * 0.0001;
+			dst_r[i] = audio_lerp_R = audio_lerp_R + (audio_samples_R[src_idx] - audio_lerp_R) * 0.0001;
+			if ((Math.abs(audio_lerp_L) + 0.0001 >= Math.abs(audio_samples_L[src_idx])) &&
+				(Math.abs(audio_lerp_R) + 0.0001 >= Math.abs(audio_samples_R[src_idx]))) {
+				audio_lerp_done = true;
+			}
 		}
 	}
 

@@ -13,13 +13,14 @@
 			nes_load_url("nes-canvas", "./InterglacticTransmissing.nes");
 			// nes_load_url("nes-canvas", "./InterglacticTransmissing.nes", function(){nes_load_nvram("intergalactic-transmissing");});
 			// nes.opts.onBatteryRamWrite = function(){nes_save_nvram("intergalactic-transmissing");};
+			let canvas = document.getElementById("nes-canvas");
 			let slider = document.getElementById("volume");
 			let label = document.getElementById("label");
 
 			let data = parseInt(window.localStorage.getItem("jsnes-volume"));
 			if (!isNaN(data) && data >= 0 && data < 256) {
 				slider.value = data;
-				label.innerHTML = "&#128266; " + Math.round(data*100/256);
+				label.innerHTML = (data > 0 ? "&#128266; " : "&#128263; ") + Math.round(data*100/256) + "%";
 				nes_volume(data);
 			} else {
 				slider.value = 256;
@@ -27,9 +28,25 @@
 
 			slider.onkeydown = function(){return false;}
 			slider.oninput = function() {
-				label.innerHTML = (this.value > 0 ? "&#128266; " : "&#128263; ") + Math.round(this.value*100/256);
+				label.innerHTML = (this.value > 0 ? "&#128266; " : "&#128263; ") + Math.round(this.value*100/256) + "%";
 				nes_volume(this.value);
 				window.localStorage.setItem("jsnes-volume", this.value);
+			}
+
+			if (canvas.requestFullscreen) {
+				function toggleFullScreen(elem) {
+					if (!document.fullscreenElement) {
+						elem.requestFullscreen();
+					} else {
+						document.exitFullscreen?.();
+					}
+				}
+
+				document.addEventListener("keydown", (e) => {
+					if (e.key === "f") {
+						toggleFullScreen(canvas);
+					}
+				});
 			}
 		}
 		</script>
@@ -37,8 +54,8 @@
 		#nes-canvas {
 			width: 256px;
 			image-rendering: crisp-edges;
-			image-rendering: pixelated;
 			image-rendering: optimizespeed;
+			image-rendering: pixelated;
 		}
 		@media (min-height: 480px) { #nes-canvas { width: 512px; } }
 		@media (min-height: 720px) { #nes-canvas { width: 768px; } }
@@ -62,7 +79,7 @@
 	<body>
 		<center>
 			<canvas id="nes-canvas" width="256" height="240"></canvas>
-			<p><div><input id="volume" type="range" min="0" max="256" value="256" style="vertical-align: middle;"> <span id="label">&#128266; 100</span>%</div></p>
+			<div><p><input id="volume" type="range" min="0" max="256" value="256" style="vertical-align: middle;"> <span id="label" style="display: inline-block; width: 8ch; text-align: left;">&#128266; 100%</span></p></div>
 		</center>
 	</body>
 </html>

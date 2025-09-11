@@ -43,10 +43,10 @@ function audio_callback(event){
 			dst_l[i] = audio_samples_L[src_idx];
 			dst_r[i] = audio_samples_R[src_idx];
 		} else {
-			dst_l[i] = audio_lerp_L = audio_lerp_L + (audio_samples_L[src_idx] - audio_lerp_L) * 0.0001;
-			dst_r[i] = audio_lerp_R = audio_lerp_R + (audio_samples_R[src_idx] - audio_lerp_R) * 0.0001;
-			if ((Math.abs(audio_lerp_L) + 0.0001 >= Math.abs(audio_samples_L[src_idx])) &&
-				(Math.abs(audio_lerp_R) + 0.0001 >= Math.abs(audio_samples_R[src_idx]))) {
+			dst_l[i] = audio_lerp_L = audio_lerp_L + (audio_samples_L[src_idx] - audio_lerp_L) * 0.00001;
+			dst_r[i] = audio_lerp_R = audio_lerp_R + (audio_samples_R[src_idx] - audio_lerp_R) * 0.00001;
+			if ((Math.abs(audio_lerp_L) + 0.00001 >= Math.abs(audio_samples_L[src_idx])) &&
+				(Math.abs(audio_lerp_R) + 0.00001 >= Math.abs(audio_samples_R[src_idx]))) {
 				audio_lerp_done = true;
 			}
 		}

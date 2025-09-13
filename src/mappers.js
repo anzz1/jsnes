@@ -1211,11 +1211,11 @@ Mappers[5].prototype.updatePRGBanks = function() {
       this.load32kRomBank(this.prgRegs[3] >> 2, 0x8000);
       break;
     case 1: // 16K + 16K
-      this.load16kRomBank(this.prgRegs[3] >> 1, 0x8000);
-      this.load16kRomBank(this.prgRegs[1] >> 1, 0xc000);
+      this.loadRomBank(this.prgRegs[3] >> 1, 0x8000);
+      this.loadRomBank(this.prgRegs[1] >> 1, 0xc000);
       break;
     case 2: // 16K + 8K + 8K
-      this.load16kRomBank(this.prgRegs[3], 0x8000);
+      this.loadRomBank(this.prgRegs[3], 0x8000);
       this.load8kRomBank(this.prgRegs[2], 0xc000);
       this.load8kRomBank(this.prgRegs[1] >> 1, 0xe000);
       break;
@@ -1468,9 +1468,6 @@ Mappers[79].prototype.loadROM = function () {
   // Load CHR ROM  
   this.load8kVromBank(0, 0x0000);
 
-  // Load Battery RAM (if present):
-  this.loadBatteryRam();
-
   // Reset IRQ:
   //nes.getCpu().doResetInterrupt();
   this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
@@ -1551,9 +1548,6 @@ Mappers[89].prototype.loadROM = function () {
   // Load CHR ROM  
   this.load8kVromBank(0, 0x0000);
 
-  // Load Battery RAM (if present):
-  this.loadBatteryRam();
-
   // Reset IRQ:
   //nes.getCpu().doResetInterrupt();
   this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
@@ -1591,6 +1585,55 @@ Mappers[94].prototype.loadROM = function () {
   // Load PRG-ROM:
   this.loadRomBank(0, 0x8000);
   this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
+ * Mapper 097 (Irem TAM-S1)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_097
+ * @example Kaiketsu Yanchamaru
+ * @constructor
+ */
+ Mappers[97] = function (nes) {
+  this.nes = nes;
+  this.mirroring = null;
+};
+
+Mappers[97].prototype = new Mappers[0]();
+
+Mappers[97].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.mirroring = null;
+}
+
+Mappers[97].prototype.write = function (address, value) {
+  if (address < 0x8000 || address > 0xbfff) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else {
+    this.loadRomBank((value & 0x1f), 0xc000);
+    let m = ((value >> 7) & 1) !== 1;
+    if (this.mirroring !== m) {
+      this.nes.ppu.setMirroring(m);
+      this.mirroring = m;
+    }
+  }
+};
+
+Mappers[97].prototype.loadROM = function () {
+  if (!this.nes.rom.valid) {
+    throw new Error("Irem TAM-S1: Invalid ROM! Unable to load.");
+  }
+
+  // Load PRG-ROM:
+  this.loadRomBank(this.nes.rom.romCount - 1, 0x8000);
+  this.loadRomBank(0, 0xc000);
 
   // Load CHR-ROM:
   this.loadCHRROM();
@@ -1658,9 +1701,6 @@ Mappers[145].prototype.loadROM = function () {
 
   // Load CHR ROM  
   this.load8kVromBank(0, 0x0000);
-
-  // Load Battery RAM (if present):
-  this.loadBatteryRam();
 
   // Reset IRQ:
   //nes.getCpu().doResetInterrupt();

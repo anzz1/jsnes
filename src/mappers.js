@@ -527,7 +527,7 @@ Mappers[0].prototype = {
 };
 
 /**
- * Mapper001 (MMC1B, SxROM)
+ * Mapper 001 (MMC1B, SxROM)
  *
  * @description http://wiki.nesdev.com/w/index.php/MMC1
  * @example Castlevania II: Simon's Quest, Dragon Warrior, Final Fantasy, Metroid, The Legend of Zelda
@@ -810,7 +810,7 @@ Mappers[1].prototype.fromJSON = function (s) {
 };
 
 /**
- * Mapper002 (UxROM)
+ * Mapper 002 (UxROM)
  *
  * @description http://wiki.nesdev.com/w/index.php/UxROM
  * @example Castlevania, Contra, DuckTales, Mega Man, Metal Gear
@@ -876,7 +876,7 @@ Mappers[3].prototype.write = function (address, value) {
 };
 
 /**
- * Mapper004 (MMC3,TxROM)
+ * Mapper 004 (MMC3,TxROM)
  *
  * @description http://wiki.nesdev.com/w/index.php/MMC3
  * @example Adventure Island II, Kirby’s Adventure, Mega Man 3, Super Mario Bros. 3
@@ -1435,6 +1435,51 @@ Mappers[66].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 079 (NINA-03/NINA-06)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_079
+ * @example Blackjack, Deathbots, Pyramid, Solitaire
+ * @constructor
+ */
+ Mappers[79] = function (nes) {
+  this.nes = nes;
+};
+
+Mappers[79].prototype = new Mappers[0]();
+
+Mappers[79].prototype.write = function (address, value) {
+  if ((address & 0x4100) !== 0x4100) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else {
+    // Swap in the given PRG-ROM bank at 0x8000:
+    this.load32kRomBank((value >> 3) & 1, 0x8000);
+
+    // Swap in the given VROM bank at 0x0000:
+    this.load8kVromBank((value & 7) * 2, 0x0000);
+  }
+};
+
+Mappers[79].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("NINA-03/NINA-06: Invalid ROM! Unable to load.");
+  }
+
+  // Load PRG ROM
+  this.load32kRomBank(0, 0x8000);
+
+  // Load CHR ROM  
+  this.load8kVromBank(0, 0x0000);
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
+
+  // Reset IRQ:
+  //nes.getCpu().doResetInterrupt();
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
  * Mapper 089
  *
  * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_089
@@ -1477,9 +1522,6 @@ Mappers[89].prototype.loadROM = function () {
   if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("Sunsoft2-3: Invalid ROM! Unable to load.");
   }
-
-  // Load ROM into memory:
-  this.loadPRGROM();
 
   // Load PRG ROM
   this.loadRomBank(0, 0x8000);
@@ -1564,6 +1606,19 @@ Mappers[140].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 146 (Sachen 3015)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_079
+ * @example Blackjack, Deathbots, Pyramid, Solitaire
+ * @constructor
+ */
+ Mappers[146] = function (nes) {
+  this.nes = nes;
+};
+
+Mappers[146].prototype = new Mappers[79]();
+
+/**
  * Mapper 180
  *
  * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_180
@@ -1605,7 +1660,7 @@ Mappers[180].prototype.loadROM = function () {
 };
 
 /**
-* Mapper 240
+ * Mapper 240
  *
  * @description https://www.nesdev.org/wiki/INES_Mapper_240
  * @example Jing Ke Xin Zhuan,Sheng Huo Lie Zhuan

@@ -54,7 +54,7 @@ var ROM = function (nes) {
   this.mapperName[75] = "Konami VRC1";
   this.mapperName[76] = "NAMCOT-3446";
   this.mapperName[78] = "Irem 74HC161/32-based";
-  this.mapperName[79] = "NINA-06";
+  this.mapperName[79] = "NINA-03/NINA-06";
   this.mapperName[80] = "Taito X1-005";
   this.mapperName[82] = "Taito X1-017";
   this.mapperName[85] = "Konami VRC7";
@@ -181,9 +181,7 @@ ROM.prototype = {
     this.trainer = (this.header[6] & 4) !== 0;
     this.fourScreen = (this.header[6] & 8) !== 0;
     this.mapperType = (this.header[6] >> 4) | (this.header[7] & 0xf0);
-    /* TODO
-        if (this.batteryRam)
-            this.loadBatteryRam();*/
+
     // Check whether byte 8-15 are zero's:
     var foundError = false;
     for (i = 8; i < 16; i++) {
@@ -279,6 +277,12 @@ ROM.prototype = {
 
   createMapper: function () {
     if (this.mapperSupported()) {
+      //console.log("Using mapper: " +
+      //  this.getMapperName() + 
+      //  "(" + 
+      //  this.mapperType.toString().padStart(3, "0") + 
+      //  ")"
+      //);
       return new Mappers[this.mapperType](this.nes);
     } else {
       throw new Error(

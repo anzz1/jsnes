@@ -31,7 +31,7 @@ Mappers[0].prototype = {
       this.nes.cpu.mem[address & 0x7ff] = value;
     } else if (address > 0x4017) {
       this.nes.cpu.mem[address] = value;
-      if (address >= 0x6000 && address < 0x8000) {
+      if (address >= 0x6000 && address < 0x8000 && this.nes.rom.batteryRam) {
         // Write to persistent RAM
         this.nes.opts.onBatteryRamWrite(address, value);
       }
@@ -508,7 +508,7 @@ Mappers[0].prototype = {
 
   // eslint-disable-next-line no-unused-vars
   latchAccess: function (address) {
-    // Does nothing. This is used by the MMC2 mapper.
+    // Does nothing. This is used by the MMC2 and MMC4 mappers.
   },
 
   toJSON: function () {
@@ -1322,6 +1322,118 @@ Mappers[7].prototype.loadROM = function () {
   // Do Reset-Interrupt:
   this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
 };
+
+/**
+ * Mapper 009 (MMC2, PxROM)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/MMC2
+ * @example Mike Tyson's Punch-Out!!
+ * @constructor
+ */
+/* UNFINISHED
+ *
+ Mappers[9] = function (nes) {
+  this.nes = nes;
+  this.mirroring = null;
+  this.chrBankL1 = 0;
+  this.chrBankL2 = 0;
+  this.chrBankR1 = 0;
+  this.chrBankR2 = 0;
+};
+
+Mappers[9].prototype = new Mappers[0]();
+
+Mappers[9].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.mirroring = null;
+  this.chrBankL1 = 0;
+  this.chrBankL2 = 0;
+  this.chrBankR1 = 0;
+  this.chrBankR2 = 0;
+}
+
+Mappers[9].prototype.write = function (address, value) {
+  if (address < 0xA000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+  } else if (address < 0xB000) {
+    // PRG ROM bank select ($A000-$AFFF)
+    this.load8kRomBank(value & 0xf, 0x8000);
+  }  else if (address < 0xC000) {
+    // CHR ROM $FD/0000 bank select ($B000-$BFFF)
+    this.chrBankL1 = (value & 0x1f);
+    this.loadVromBank(value & 0x1f, 0x0000);
+  } else if (address < 0xD000) {
+    // CHR ROM $FE/0000 bank select ($C000-$CFFF)
+    this.chrBankL2 = (value & 0x1f);
+    this.loadVromBank(value & 0x1f, 0x0000);
+  } else if (address < 0xE000) {
+    // CHR ROM $FD/1000 bank select ($D000-$DFFF)
+    this.chrBankR1 = (value & 0x1f);
+    this.loadVromBank(value & 0x1f, 0x1000);
+  } else if (address < 0xF000) {
+    // CHR ROM $FE/1000 bank select ($E000-$EFFF)
+    this.chrBankR2 = (value & 0x1f);
+    this.loadVromBank(value & 0x1f, 0x1000);
+  } else {
+    // Mirroring ($F000-$FFFF)
+    let m = (address & 1);
+    if (this.mirroring !== m) {
+      this.nes.ppu.setMirroring(m);
+      this.mirroring = m;
+    }
+  }
+};
+
+Mappers[9].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 3 || this.nes.rom.vromCount < 1) {
+    throw new Error("MMC2: Invalid ROM! Unable to load.");
+  }
+
+  // Load PRG ROM
+  this.load8kRomBank((this.nes.rom.romCount - 2) * 2, 0x8000);
+  this.load8kRomBank((this.nes.rom.romCount - 2) * 2 + 1, 0xa000);
+  this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
+  this.load8kRomBank((this.nes.rom.romCount - 1) * 2 + 1, 0xe000);
+
+  // Load CHR ROM  
+  this.loadVromBank(0, 0x0000);
+  this.loadVromBank(this.nes.rom.vromCount - 1, 0x1000);
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[9].prototype.latchAccess = function (address) {
+  switch(address) {
+    case 0x0fd8:
+      this.loadVromBank(this.chrBankL1, 0x0000);
+      break;
+    case 0x0fe8:
+      this.loadVromBank(this.chrBankL2, 0x0000);
+      break;
+    case 0x1fd8:
+    case 0x1fd9:
+    case 0x1fda:
+    case 0x1fdb:
+    case 0x1fdc:
+    case 0x1fdd:
+    case 0x1fde:
+    case 0x1fdf:
+      this.loadVromBank(this.chrBankR1, 0x1000);
+      break;
+    case 0x1fe8:
+    case 0x1fe9:
+    case 0x1fea:
+    case 0x1feb:
+    case 0x1fec:
+    case 0x1fed:
+    case 0x1fee:
+    case 0x1fef:
+      this.loadVromBank(this.chrBankR2, 0x1000);
+      break;
+  }
+};
+*/
 
 /**
  * Mapper 011 (Color Dreams)

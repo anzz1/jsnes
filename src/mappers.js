@@ -1330,15 +1330,25 @@ Mappers[7].prototype.loadROM = function () {
  * @example Mike Tyson's Punch-Out!!
  * @constructor
  */
-/* UNFINISHED
- *
+
+/**
+ * UNFINISHED
+ * 
  Mappers[9] = function (nes) {
   this.nes = nes;
+
+  this.CHR_LATCH_OFF = 0xfd;
+  this.CHR_LATCH_ON = 0xfe;
+
   this.mirroring = null;
   this.chrBankL1 = 0;
   this.chrBankL2 = 0;
   this.chrBankR1 = 0;
   this.chrBankR2 = 0;
+  this.chrLatchL = this.CHR_LATCH_ON;
+  this.chrLatchR = this.CHR_LATCH_ON;
+  this.needsChrUpdateL = false;
+  this.needsChrUpdateR = false;
 };
 
 Mappers[9].prototype = new Mappers[0]();
@@ -1350,6 +1360,10 @@ Mappers[9].prototype.reset = function () {
   this.chrBankL2 = 0;
   this.chrBankR1 = 0;
   this.chrBankR2 = 0;
+  this.chrLatchL = this.CHR_LATCH_ON;
+  this.chrLatchR = this.CHR_LATCH_ON;
+  this.needsChrUpdateL = false;
+  this.needsChrUpdateR = false;
 }
 
 Mappers[9].prototype.write = function (address, value) {
@@ -1361,19 +1375,43 @@ Mappers[9].prototype.write = function (address, value) {
   }  else if (address < 0xC000) {
     // CHR ROM $FD/0000 bank select ($B000-$BFFF)
     this.chrBankL1 = (value & 0x1f);
-    this.loadVromBank(value & 0x1f, 0x0000);
+
+    if (this.chrLatchL === this.CHR_LATCH_OFF) {
+      this.loadVromBank(this.chrBankL1, 0x0000);
+    } else {
+      this.loadVromBank(this.chrBankL2, 0x0000);
+    }
+    this.needsChrUpdateL = false;
   } else if (address < 0xD000) {
     // CHR ROM $FE/0000 bank select ($C000-$CFFF)
     this.chrBankL2 = (value & 0x1f);
-    this.loadVromBank(value & 0x1f, 0x0000);
+    
+    if (this.chrLatchL === this.CHR_LATCH_OFF) {
+      this.loadVromBank(this.chrBankL1, 0x0000);
+    } else {
+      this.loadVromBank(this.chrBankL2, 0x0000);
+    }
+    this.needsChrUpdateL = false;
   } else if (address < 0xE000) {
     // CHR ROM $FD/1000 bank select ($D000-$DFFF)
     this.chrBankR1 = (value & 0x1f);
-    this.loadVromBank(value & 0x1f, 0x1000);
+    
+    if (this.chrLatchR === this.CHR_LATCH_OFF) {
+      this.loadVromBank(this.chrBankR1, 0x1000);
+    } else {
+      this.loadVromBank(this.chrBankR2, 0x1000);
+    }
+    this.needsChrUpdateR = false;
   } else if (address < 0xF000) {
     // CHR ROM $FE/1000 bank select ($E000-$EFFF)
     this.chrBankR2 = (value & 0x1f);
-    this.loadVromBank(value & 0x1f, 0x1000);
+    
+    if (this.chrLatchR === this.CHR_LATCH_OFF) {
+      this.loadVromBank(this.chrBankR1, 0x1000);
+    } else {
+      this.loadVromBank(this.chrBankR2, 0x1000);
+    }
+    this.needsChrUpdateR = false;
   } else {
     // Mirroring ($F000-$FFFF)
     let m = (address & 1);
@@ -1390,7 +1428,7 @@ Mappers[9].prototype.loadROM = function () {
   }
 
   // Load PRG ROM
-  this.load8kRomBank((this.nes.rom.romCount - 2) * 2, 0x8000);
+  this.load8kRomBank(0, 0x8000);
   this.load8kRomBank((this.nes.rom.romCount - 2) * 2 + 1, 0xa000);
   this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
   this.load8kRomBank((this.nes.rom.romCount - 1) * 2 + 1, 0xe000);
@@ -1404,12 +1442,32 @@ Mappers[9].prototype.loadROM = function () {
 };
 
 Mappers[9].prototype.latchAccess = function (address) {
+  if (this.needsChrUpdateL) {
+    if (this.chrLatchL === this.CHR_LATCH_OFF) {
+      this.loadVromBank(this.chrBankL1, 0x0000);
+    } else {
+      this.loadVromBank(this.chrBankL2, 0x0000);
+    }
+    this.needsChrUpdateL = false;
+  }
+  if (this.needsChrUpdateR) {
+    if (this.chrLatchR === this.CHR_LATCH_OFF) {
+      this.loadVromBank(this.chrBankR1, 0x1000);
+    } else {
+      this.loadVromBank(this.chrBankR2, 0x1000);
+    }
+    this.needsChrUpdateR = false;
+  }
+
+  // TODO: For some reason these latch set operations never get called
   switch(address) {
     case 0x0fd8:
-      this.loadVromBank(this.chrBankL1, 0x0000);
+      this.chrLatchL = this.CHR_LATCH_OFF;
+      this.needsChrUpdate = true;
       break;
     case 0x0fe8:
-      this.loadVromBank(this.chrBankL2, 0x0000);
+      this.chrLatchL = this.CHR_LATCH_ON;
+      this.needsChrUpdate = true;
       break;
     case 0x1fd8:
     case 0x1fd9:
@@ -1419,7 +1477,8 @@ Mappers[9].prototype.latchAccess = function (address) {
     case 0x1fdd:
     case 0x1fde:
     case 0x1fdf:
-      this.loadVromBank(this.chrBankR1, 0x1000);
+      this.chrLatchR = this.CHR_LATCH_OFF;
+      this.needsChrUpdate = true;
       break;
     case 0x1fe8:
     case 0x1fe9:
@@ -1429,7 +1488,8 @@ Mappers[9].prototype.latchAccess = function (address) {
     case 0x1fed:
     case 0x1fee:
     case 0x1fef:
-      this.loadVromBank(this.chrBankR2, 0x1000);
+      this.chrLatchR = this.CHR_LATCH_ON;
+      this.needsChrUpdate = true;
       break;
   }
 };

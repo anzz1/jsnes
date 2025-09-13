@@ -541,7 +541,7 @@ Mappers[1] = function (nes) {
   this.regBufferCounter = 0;
 
   // Register 0:
-  this.mirroring = this.nes.rom.VERTICAL_MIRRORING;
+  this.mirroring = null;
   this.oneScreenMirroring = 0;
   this.prgSwitchingArea = 1;
   this.prgSwitchingSize = 1;
@@ -563,7 +563,7 @@ Mappers[1].prototype.reset = function () {
   Mappers[0].prototype.reset.apply();
   this.regBuffer = 0;
   this.regBufferCounter = 0;
-  this.mirroring = this.nes.rom.VERTICAL_MIRRORING;
+  this.mirroring = null;
   this.oneScreenMirroring = 0;
   this.prgSwitchingArea = 1;
   this.prgSwitchingSize = 1;

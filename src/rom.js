@@ -182,17 +182,8 @@ ROM.prototype = {
     this.fourScreen = (this.header[6] & 8) !== 0;
     this.mapperType = (this.header[6] >> 4) | (this.header[7] & 0xf0);
 
-    // Check whether byte 8-15 are zero's:
-    var foundError = false;
-    for (i = 8; i < 16; i++) {
-      if (this.header[i] !== 0) {
-        foundError = true;
-        break;
-      }
-    }
-    if (foundError) {
-      this.mapperType &= 0xf; // Ignore byte 7
-    }
+    // TODO: Detect NES 2.0 headers for mappers > 255
+
     // Load PRG-ROM banks:
     this.rom = new Array(this.romCount);
     var offset = 16;

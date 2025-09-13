@@ -1236,8 +1236,8 @@ Mappers[5].prototype.updateCHRBanks = function() {
       this.load8kVromBank(this.chrRegs[7] >> 3, 0x0000);
       break;
     case 1: // 4K + 4K
-      this.load4kVromBank(this.chrRegs[3] >> 2, 0x0000);
-      this.load4kVromBank(this.chrRegs[7] >> 2, 0x1000);
+      this.loadVromBank(this.chrRegs[3] >> 2, 0x0000);
+      this.loadVromBank(this.chrRegs[7] >> 2, 0x1000);
       break;
     case 2: // 2K + 2K + 2K + 2K
       for (let i = 0; i < 4; i++) {
@@ -1246,7 +1246,7 @@ Mappers[5].prototype.updateCHRBanks = function() {
       break;
     case 3: // 1K + 1K + 1K + 1K + 1K + 1K + 1K + 1K
       for (let i = 0; i < 8; i++) {
-        this.loadVromBank(this.chrRegs[i], 0x0000 + i*0x0400);
+        this.load1kVromBank(this.chrRegs[i], 0x0000 + i*0x0400);
       }
       break;
   }
@@ -1617,6 +1617,45 @@ Mappers[140].prototype.write = function (address, value) {
 };
 
 Mappers[146].prototype = new Mappers[79]();
+
+/**
+ * Mapper 148 (Tengen 800008)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_148
+ * @example Tetris (Tengen)
+ * @constructor
+ */
+ Mappers[148] = function (nes) {
+  this.nes = nes;
+};
+
+Mappers[148].prototype = new Mappers[0]();
+
+Mappers[148].prototype.write = function (address, value) {
+  if ((address & 0x8000) === 0x8000) {
+    // Swap in the given PRG-ROM bank at 0x8000:
+    this.load32kRomBank((value >> 3) & 1, 0x8000);
+
+    // Swap in the given VROM bank at 0x0000:
+    this.load8kVromBank((value & 7) * 2, 0x0000);
+  }
+  Mappers[0].prototype.write.apply(this, arguments);
+};
+
+Mappers[148].prototype.loadROM = function () {
+  if (!this.nes.rom.valid) {
+    throw new Error("Tengen 800008: Invalid ROM! Unable to load.");
+  }
+
+  // Load PRG-ROM:
+  this.load32kRomBank(0, 0x8000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
 
 /**
  * Mapper 180

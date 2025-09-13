@@ -823,7 +823,6 @@ Mappers[2] = function (nes) {
 Mappers[2].prototype = new Mappers[0]();
 
 Mappers[2].prototype.write = function (address, value) {
-  // Writes to addresses other than MMC registers are handled by NoMapper.
   if (address < 0x8000) {
     Mappers[0].prototype.write.apply(this, arguments);
     return;
@@ -864,7 +863,6 @@ Mappers[3] = function (nes) {
 Mappers[3].prototype = new Mappers[0]();
 
 Mappers[3].prototype.write = function (address, value) {
-  // Writes to addresses other than MMC registers are handled by NoMapper.
   if (address < 0x8000) {
     Mappers[0].prototype.write.apply(this, arguments);
     return;
@@ -1298,7 +1296,6 @@ Mappers[7] = function (nes) {
 Mappers[7].prototype = new Mappers[0]();
 
 Mappers[7].prototype.write = function (address, value) {
-  // Writes to addresses other than MMC registers are handled by NoMapper.
   if (address < 0x8000) {
     Mappers[0].prototype.write.apply(this, arguments);
   } else {
@@ -1480,6 +1477,30 @@ Mappers[79].prototype.loadROM = function () {
 };
 
 /**
+ * Mapper 087 (J87)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_087
+ * @example Argus, Jajamaru no Daibouken, Kage no Densetsu
+ * @constructor
+ */
+ Mappers[87] = function (nes) {
+  this.nes = nes;
+};
+
+Mappers[87].prototype = new Mappers[0]();
+
+Mappers[87].prototype.write = function (address, value) {
+  if (address < 0x6000 | address > 0x7FFF) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else {
+    // This is a ROM bank select command.
+    // Swap in the given VROM bank at 0x0000:
+    this.load8kVromBank((((value & 2) >> 1) | ((value & 1) << 1)) * 2, 0x0000);
+  }
+};
+
+/**
  * Mapper 089
  *
  * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_089
@@ -1552,7 +1573,6 @@ Mappers[94] = function (nes) {
 Mappers[94].prototype = new Mappers[0]();
 
 Mappers[94].prototype.write = function (address, value) {
-  // Writes to addresses other than MMC registers are handled by NoMapper.
   if (address < 0x8000) {
     Mappers[0].prototype.write.apply(this, arguments);
     return;
@@ -1606,10 +1626,52 @@ Mappers[140].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 145 (Sachen SA-72007)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_145
+ * @example Blackjack, Deathbots, Pyramid, Solitaire
+ * @constructor
+ */
+ Mappers[145] = function (nes) {
+  this.nes = nes;
+};
+
+Mappers[145].prototype = new Mappers[0]();
+
+Mappers[145].prototype.write = function (address, value) {
+  if ((address & 0x4100) !== 0x4100) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else {
+    // Swap in the given VROM bank at 0x0000:
+    this.load8kVromBank(((value & 0x80) >> 7) * 2, 0x0000);
+  }
+};
+
+Mappers[145].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("Sachen SA-72007: Invalid ROM! Unable to load.");
+  }
+
+  // Load PRG ROM
+  this.loadPRGROM();
+
+  // Load CHR ROM  
+  this.load8kVromBank(0, 0x0000);
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
+
+  // Reset IRQ:
+  //nes.getCpu().doResetInterrupt();
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
  * Mapper 146 (Sachen 3015)
  *
- * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_079
- * @example Blackjack, Deathbots, Pyramid, Solitaire
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_146
+ * @example Galactic Crusader
  * @constructor
  */
  Mappers[146] = function (nes) {
@@ -1671,7 +1733,6 @@ Mappers[180] = function (nes) {
 Mappers[180].prototype = new Mappers[0]();
 
 Mappers[180].prototype.write = function (address, value) {
-  // Writes to addresses other than MMC registers are handled by NoMapper.
   if (address < 0x8000) {
     Mappers[0].prototype.write.apply(this, arguments);
     return;

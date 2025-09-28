@@ -13,6 +13,7 @@ var NES = function (opts) {
 
     emulateSound: true,
     sampleRate: 48000,
+    mode: this.MODE_NTSC
   };
   if (typeof opts !== "undefined") {
     var key;
@@ -47,6 +48,9 @@ var NES = function (opts) {
 };
 
 NES.prototype = {
+  MODE_NTSC: 0,
+  MODE_PAL: 1,
+
   frameCount: 0,
   fpsFrameCount: 0,
   romData: null,
@@ -193,7 +197,19 @@ NES.prototype = {
 
   // Loads a ROM file into the CPU and PPU.
   // The ROM file is validated first.
-  loadROM: function (data) {
+  loadROM: function (data, mode = "NTSC") {
+    switch(mode) {
+      case "NTSC":
+        this.opts.mode = this.MODE_NTSC;
+        break;
+      case "PAL":
+        this.opts.mode = this.MODE_PAL;
+        break;
+      default:
+        console.error("Invalid mode '%s'. Valid values are 'NTSC', 'PAL'.", mode);
+        return false;
+    }
+
     // Load ROM file:
     this.rom = new ROM(this);
     this.rom.load(data);
@@ -203,6 +219,7 @@ NES.prototype = {
     this.mmap.loadROM();
     this.ppu.setMirroring(this.rom.getMirroringType());
     this.romData = data;
+    return true;
   },
 
   toJSON: function () {

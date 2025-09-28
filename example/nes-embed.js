@@ -53,9 +53,11 @@ function keyboard(callback, event){
 			callback(player, jsnes.Controller.BUTTON_LEFT); break;
 		case 39: // Right
 			callback(player, jsnes.Controller.BUTTON_RIGHT); break;
-		case 88: // A = X
+		case 83:
+		case 88: // A = X or S
 			callback(player, jsnes.Controller.BUTTON_A); break;
-		case 90: // B = Z
+		case 65:
+		case 90: // B = Z or A
 			callback(player, jsnes.Controller.BUTTON_B); break;
 		case 16: // SELECT = Shift
 			callback(player, jsnes.Controller.BUTTON_SELECT); break;
@@ -103,17 +105,19 @@ function nes_init(canvas_id){
 	document.addEventListener('keyup', (event) => {keyboard(nes.buttonUp, event)});
 }
 
-function nes_boot(rom_data){
-	nes.loadROM(rom_data);
-	window.requestAnimationFrame(onAnimationFrame);
+function nes_boot(rom_data, callback = null, mode = "NTSC"){
+	if (nes.loadROM(rom_data, mode)) {
+		window.requestAnimationFrame(onAnimationFrame);
+		if (callback) callback();
+	}
 }
 
-function nes_load_data(canvas_id, rom_data){
+function nes_load_data(canvas_id, rom_data, callback = null, mode = "NTSC"){
 	nes_init(canvas_id);
-	nes_boot(rom_data);
+	nes_boot(rom_data, callback, mode);
 }
 
-function nes_load_url(canvas_id, path, callback = null){
+function nes_load_url(canvas_id, path, callback = null, mode = "NTSC"){
 	nes_init(canvas_id);
 
 	var req = new XMLHttpRequest();
@@ -123,8 +127,7 @@ function nes_load_url(canvas_id, path, callback = null){
 
 	req.onload = function() {
 		if (this.status === 200) {
-			nes_boot(this.responseText);
-			if (callback) callback();
+			nes_boot(this.responseText, callback, mode);
 		} else if (this.status === 0) {
 			// Aborted, so ignore error
 		} else {

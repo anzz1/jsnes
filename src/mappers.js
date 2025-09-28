@@ -502,8 +502,12 @@ Mappers[0].prototype = {
     );
   },
 
-  clockIrqCounter: function () {
+  ppuClockIrqCounter: function () {
     // Does nothing. This is used by the MMC3 mapper.
+  },
+
+  cpuClockIrqCounter: function () {
+    // Does nothing. This is used by the VRC3 and Kaiser KS202 mappers.
   },
 
   // eslint-disable-next-line no-unused-vars
@@ -749,7 +753,7 @@ Mappers[1].prototype.getRegNumber = function (address) {
 };
 
 Mappers[1].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("MMC1: Invalid ROM! Unable to load.");
   }
 
@@ -834,7 +838,7 @@ Mappers[2].prototype.write = function (address, value) {
 };
 
 Mappers[2].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("UNROM: Invalid ROM! Unable to load.");
   }
 
@@ -1070,7 +1074,7 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
 };
 
 Mappers[4].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("MMC3: Invalid ROM! Unable to load.");
   }
 
@@ -1092,7 +1096,7 @@ Mappers[4].prototype.loadROM = function () {
   this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
 };
 
-Mappers[4].prototype.clockIrqCounter = function () {
+Mappers[4].prototype.ppuClockIrqCounter = function () {
   if (this.irqEnable === 1) {
     this.irqCounter--;
     if (this.irqCounter < 0) {
@@ -1309,7 +1313,7 @@ Mappers[7].prototype.write = function (address, value) {
 };
 
 Mappers[7].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("AxROM: Invalid ROM! Unable to load.");
   }
 
@@ -1604,6 +1608,108 @@ Mappers[66].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 073 (Konami VRC3)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/VRC3
+ * @example Salamander
+ * @constructor
+ */
+ Mappers[73] = function (nes) {
+  this.nes = nes;
+
+  this.IRQ_COUNTER_16BIT = 0;
+  this.IRQ_COUNTER_8BIT = 1;
+  
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+};
+
+Mappers[73].prototype = new Mappers[0]();
+
+Mappers[73].prototype.write = function (address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else if (address <= 0x8fff) {
+    // IRQ Latch 0 ($8000-$8FFF)
+    // Bits 0-3
+    this.irqLatchValue = (this.irqLatchValue & 0xfff0) | (value & 0xf);
+  } else if (address <= 0x9fff) {
+    // IRQ Latch 1 ($9000-$9FFF)
+    // Bits 4-7
+    this.irqLatchValue = (this.irqLatchValue & 0xff0f) | ((value & 0xf) << 4);
+  } else if (address <= 0xafff) {
+    // IRQ Latch 2 ($A000-$AFFF)
+    // Bits 8-11
+    this.irqLatchValue = (this.irqLatchValue & 0xf0ff) | ((value & 0xf) << 8);
+  } else if (address <= 0xbfff) {
+    // IRQ Latch 3 ($B000-$BFFF)
+    // Bits 12-15
+    this.irqLatchValue = (this.irqLatchValue & 0x0fff) | ((value & 0xf) << 12);
+  } else if (address <= 0xcfff) {
+    // IRQ Control ($C000-$CFFF)
+    this.irqEnableOnAck = !!(value & 1);
+    this.irqEnable = !!(value & 2);
+    this.irqMode = (value >> 2) & 1;
+    if (this.irqEnable) {
+      this.irqCounter = this.irqLatchValue;
+    }
+  } else if (address <= 0xdfff) {
+    // IRQ Acknowledge ($D000-$DFFF)
+    if (this.irqEnableOnAck) {
+      this.irqEnable = true;
+    }
+    this.nes.cpu.clearIrq();
+  } else if (address >= 0xf000) {
+    // Bank select ($F000-$FFFF)
+    this.loadRomBank((value & 0x7), 0x8000);
+  }
+};
+
+Mappers[73].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("Konami VRC3: Invalid ROM! Unable to load.");
+  }
+
+  // Load hardwired PRG bank (0xC000):
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[73].prototype.cpuClockIrqCounter = function () {
+  if (this.irqEnable) {
+    this.irqCounter++;
+    if (this.irqMode === this.IRQ_COUNTER_16BIT) {
+        if (this.irqCounter > 0xFFFF) {
+        // Trigger IRQ:
+        //nes.getCpu().doIrq();
+        this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+        this.irqCounter = this.irqLatchValue;
+      }
+    }
+    else if (this.irqMode === this.IRQ_COUNTER_8BIT) {
+      if (this.irqCounter > 0xFF) {
+        // Trigger IRQ:
+        //nes.getCpu().doIrq();
+        this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+        this.irqCounter = this.irqLatchValue & 0xFF;
+      }
+    }
+  }
+};
+
+/**
  * Mapper 079 (NINA-03/NINA-06)
  *
  * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_079
@@ -1630,7 +1736,7 @@ Mappers[79].prototype.write = function (address, value) {
 };
 
 Mappers[79].prototype.loadROM = function () {
-  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 2) {
     throw new Error("NINA-03/NINA-06: Invalid ROM! Unable to load.");
   }
 
@@ -1750,7 +1856,7 @@ Mappers[94].prototype.write = function (address, value) {
 };
 
 Mappers[94].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("UN1ROM: Invalid ROM! Unable to load.");
   }
 
@@ -1799,7 +1905,7 @@ Mappers[97].prototype.write = function (address, value) {
 };
 
 Mappers[97].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("Irem TAM-S1: Invalid ROM! Unable to load.");
   }
 
@@ -1837,6 +1943,128 @@ Mappers[140].prototype.write = function (address, value) {
 
     // Swap in the given VROM bank at 0x0000:
     this.load8kVromBank((value & 0xf) * 2, 0x0000);
+  }
+};
+
+/**
+ * Mapper 142 (Kaiser KS202)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_142
+ * @example Super Mario Bros. 2j
+ * @constructor
+ */
+ Mappers[142] = function (nes) {
+  this.nes = nes;
+
+  this.IRQ_COUNTER_16BIT = 0;
+  this.IRQ_COUNTER_8BIT = 1;
+  
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.bankSelect = null;
+};
+
+Mappers[142].prototype = new Mappers[0]();
+
+Mappers[142].prototype.write = function (address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else if (address <= 0x8FFF) {
+    // IRQ Latch 0 ($8000-$8FFF)
+    // Bits 0-3
+    this.irqLatchValue = (this.irqLatchValue & 0xfff0) | (value & 0xf);
+  } else if (address <= 0x9FFF) {
+    // IRQ Latch 1 ($9000-$9FFF)
+    // Bits 4-7
+    this.irqLatchValue = (this.irqLatchValue & 0xff0f) | ((value & 0xf) << 4);
+  } else if (address <= 0xAFFF) {
+    // IRQ Latch 2 ($A000-$AFFF)
+    // Bits 8-11
+    this.irqLatchValue = (this.irqLatchValue & 0xf0ff) | ((value & 0xf) << 8);
+  } else if (address <= 0xBFFF) {
+    // IRQ Latch 3 ($B000-$BFFF)
+    // Bits 12-15
+    this.irqLatchValue = (this.irqLatchValue & 0x0fff) | ((value & 0xf) << 12);
+  } else if (address <= 0xCFFF) {
+    // IRQ Control ($C000-$CFFF)
+    this.irqEnableOnAck = !!(value & 1);
+    this.irqEnable = !!(value & 2);
+    this.irqMode = (value >> 2) & 1;
+    if (this.irqEnable) {
+      this.irqCounter = this.irqLatchValue;
+    }
+  } else if (address <= 0xDFFF) {
+    // IRQ Acknowledge ($D000-$DFFF)
+    if (this.irqEnableOnAck) {
+      this.irqEnable = true;
+    }
+    this.nes.cpu.clearIrq();
+  } else if (address <= 0xEFFF) {
+    // Bank select ($E000-$EFFF)
+    this.bankSelect = (value & 0xf);
+  } else {
+    // Bank data ($F000-$FFFF)
+    switch (this.bankSelect) {
+      case 1:
+        this.load8kRomBank((value & 0xf), 0x8000);
+        break;
+      case 2:
+        this.load8kRomBank((value & 0xf), 0xA000);
+        break;
+      case 3:
+        this.load8kRomBank((value & 0xf), 0xC000);
+        break;
+      case 4:
+        this.load8kRomBank((value & 0xf), 0x6000);
+        break;
+      default:
+        // 6 = do nothing
+        // 0, 5, 7 = unknown
+    }
+  }
+};
+
+Mappers[142].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("Kaiser KS202: Invalid ROM! Unable to load.");
+  }
+
+  // Load hardwired PRG bank (0xE000):
+  this.load8kRomBank((this.nes.rom.romCount - 1) * 2 + 1, 0xe000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[142].prototype.cpuClockIrqCounter = function () {
+  if (this.irqEnable) {
+    this.irqCounter++;
+    if (this.irqMode === this.IRQ_COUNTER_16BIT) {
+        if (this.irqCounter > 0xFFFF) {
+        // Trigger IRQ:
+        //nes.getCpu().doIrq();
+        this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+        this.irqCounter = this.irqLatchValue;
+      }
+    }
+    else if (this.irqMode === this.IRQ_COUNTER_8BIT) {
+      if (this.irqCounter > 0xFF) {
+        // Trigger IRQ:
+        //nes.getCpu().doIrq();
+        this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+        this.irqCounter = this.irqLatchValue & 0xFF;
+      }
+    }
   }
 };
 
@@ -1917,7 +2145,7 @@ Mappers[148].prototype.write = function (address, value) {
 };
 
 Mappers[148].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 2) {
     throw new Error("Tengen 800008: Invalid ROM! Unable to load.");
   }
 
@@ -1956,7 +2184,7 @@ Mappers[180].prototype.write = function (address, value) {
 };
 
 Mappers[180].prototype.loadROM = function () {
-  if (!this.nes.rom.valid) {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
     throw new Error("Mapper 180: Invalid ROM! Unable to load.");
   }
 

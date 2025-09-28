@@ -1286,6 +1286,9 @@ CPU.prototype = {
       }
     } // end of switch
 
+    // Clock mapper IRQ Counter:
+    for (var i = 0; i < cycleCount; i++) this.nes.mmap.cpuClockIrqCounter();
+
     return cycleCount;
   },
 
@@ -1322,6 +1325,10 @@ CPU.prototype = {
     }
     this.irqRequested = true;
     this.irqType = type;
+  },
+
+  clearIrq: function() {
+    this.irqRequested = false;
   },
 
   push: function (value) {

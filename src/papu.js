@@ -1,9 +1,9 @@
 var utils = require("./utils");
 
 var CPU_FREQ_NTSC = 1789772.5; //1789772.72727272d;
-// var CPU_FREQ_PAL = 1773447.4;
+var CPU_FREQ_PAL = 1773447.4;
 var APU_TO_CPU_CYCLE_NTSC = 14915;
-// var APU_TO_CPU_CYCLE_PAL = 16627;
+var APU_TO_CPU_CYCLE_PAL = 16627;
 
 var PAPU = function (nes) {
   this.nes = nes;
@@ -105,10 +105,10 @@ PAPU.prototype = {
   reset: function () {
     this.sampleRate = this.nes.opts.sampleRate;
     this.sampleTimerMax = Math.floor(
-      (1024.0 * CPU_FREQ_NTSC) / this.sampleRate
+      (1024.0 * (this.nes.opts.mode === this.nes.MODE_PAL ? CPU_FREQ_PAL : CPU_FREQ_NTSC)) / this.sampleRate
     );
 
-    this.frameTime = APU_TO_CPU_CYCLE_NTSC;
+    this.frameTime = (this.nes.opts.mode === this.nes.MODE_PAL ? APU_TO_CPU_CYCLE_PAL : APU_TO_CPU_CYCLE_NTSC);
 
     this.sampleTimer = 0;
 

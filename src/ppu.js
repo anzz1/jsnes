@@ -207,7 +207,11 @@ PPU.prototype = {
     }
 
     this.palTable = new PaletteTable();
-    this.palTable.loadNTSCPalette();
+    if (this.nes.opts.mode === this.nes.MODE_PAL) {
+      this.palTable.loadPALPalette();
+    } else {
+      this.palTable.loadNTSCPalette();
+    }
     //this.palTable.loadDefaultPalette();
 
     this.updateControlReg1(0);
@@ -363,7 +367,7 @@ PPU.prototype = {
 
         if (this.f_bgVisibility === 1 || this.f_spVisibility === 1) {
           // Clock mapper IRQ Counter:
-          this.nes.mmap.clockIrqCounter();
+          this.nes.mmap.ppuClockIrqCounter();
         }
         break;
 
@@ -409,7 +413,7 @@ PPU.prototype = {
 
           if (this.f_bgVisibility === 1 || this.f_spVisibility === 1) {
             // Clock mapper IRQ Counter:
-            this.nes.mmap.clockIrqCounter();
+            this.nes.mmap.ppuClockIrqCounter();
           }
         }
     }

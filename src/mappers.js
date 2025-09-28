@@ -887,8 +887,8 @@ Mappers[3].prototype.write = function (address, value) {
 Mappers[4] = function (nes) {
   this.nes = nes;
 
-  this.CMD_SEL_2_1K_VROM_0000 = 0;
-  this.CMD_SEL_2_1K_VROM_0800 = 1;
+  this.CMD_SEL_2K_VROM_0000 = 0;
+  this.CMD_SEL_2K_VROM_0800 = 1;
   this.CMD_SEL_1K_VROM_1000 = 2;
   this.CMD_SEL_1K_VROM_1400 = 3;
   this.CMD_SEL_1K_VROM_1800 = 4;
@@ -899,7 +899,6 @@ Mappers[4] = function (nes) {
   this.command = null;
   this.prgAddressSelect = null;
   this.chrAddressSelect = null;
-  this.pageNumber = null;
   this.irqCounter = null;
   this.irqLatchValue = null;
   this.irqEnable = null;
@@ -915,7 +914,7 @@ Mappers[4].prototype.write = function (address, value) {
     return;
   }
 
-  switch (address) {
+  switch (address & 0xe001) {
     case 0x8000:
       // Command/Address Select register
       this.command = value & 7;
@@ -942,67 +941,55 @@ Mappers[4].prototype.write = function (address, value) {
       break;
 
     case 0xa001:
-      // SaveRAM Toggle
+      // SaveRAM Write-Protect Toggle
       // TODO
-      //nes.getRom().setSaveState((value&1)!=0);
       break;
 
     case 0xc000:
-      // IRQ Counter register
-      this.irqCounter = value;
-      //nes.ppu.mapperIrqCounter = 0;
-      break;
-
-    case 0xc001:
-      // IRQ Latch register
+      // IRQ Latch set
       this.irqLatchValue = value;
       break;
 
+    case 0xc001:
+      // IRQ Reload
+      this.irqCounter = this.irqLatchValue;
+      break;
+
     case 0xe000:
-      // IRQ Control Reg 0 (disable)
-      //irqCounter = irqLatchValue;
-      this.irqEnable = 0;
+      // IRQ Disable
+      this.irqEnable = false;
+      this.nes.cpu.clearIrq();
       break;
 
     case 0xe001:
-      // IRQ Control Reg 1 (enable)
-      this.irqEnable = 1;
+      // IRQ Enable
+      this.irqEnable = true;
       break;
-
-    default:
-    // Not a MMC3 register.
-    // The game has probably crashed,
-    // since it tries to write to ROM..
-    // IGNORE.
   }
 };
 
 Mappers[4].prototype.executeCommand = function (cmd, arg) {
   switch (cmd) {
-    case this.CMD_SEL_2_1K_VROM_0000:
-      // Select 2 1KB VROM pages at 0x0000:
+    case this.CMD_SEL_2K_VROM_0000:
+      // Select 2K VROM page at 0x0000 or 0x1000:
       if (this.chrAddressSelect === 0) {
-        this.load1kVromBank(arg, 0x0000);
-        this.load1kVromBank(arg + 1, 0x0400);
+        this.load2kVromBank(arg / 2, 0x0000);
       } else {
-        this.load1kVromBank(arg, 0x1000);
-        this.load1kVromBank(arg + 1, 0x1400);
+        this.load2kVromBank(arg / 2, 0x1000);
       }
       break;
 
-    case this.CMD_SEL_2_1K_VROM_0800:
-      // Select 2 1KB VROM pages at 0x0800:
+    case this.CMD_SEL_2K_VROM_0800:
+      // Select 2K VROM page at 0x0800 or 0x1800:
       if (this.chrAddressSelect === 0) {
-        this.load1kVromBank(arg, 0x0800);
-        this.load1kVromBank(arg + 1, 0x0c00);
+        this.load2kVromBank(arg / 2, 0x0800);
       } else {
-        this.load1kVromBank(arg, 0x1800);
-        this.load1kVromBank(arg + 1, 0x1c00);
+        this.load2kVromBank(arg / 2, 0x1800);
       }
       break;
 
     case this.CMD_SEL_1K_VROM_1000:
-      // Select 1K VROM Page at 0x1000:
+      // Select 1K VROM Page at 0x1000 or 0x0000:
       if (this.chrAddressSelect === 0) {
         this.load1kVromBank(arg, 0x1000);
       } else {
@@ -1011,7 +998,7 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
       break;
 
     case this.CMD_SEL_1K_VROM_1400:
-      // Select 1K VROM Page at 0x1400:
+      // Select 1K VROM Page at 0x1400 or 0x0400:
       if (this.chrAddressSelect === 0) {
         this.load1kVromBank(arg, 0x1400);
       } else {
@@ -1020,7 +1007,7 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
       break;
 
     case this.CMD_SEL_1K_VROM_1800:
-      // Select 1K VROM Page at 0x1800:
+      // Select 1K VROM Page at 0x1800 or 0x0800:
       if (this.chrAddressSelect === 0) {
         this.load1kVromBank(arg, 0x1800);
       } else {
@@ -1029,7 +1016,7 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
       break;
 
     case this.CMD_SEL_1K_VROM_1C00:
-      // Select 1K VROM Page at 0x1C00:
+      // Select 1K VROM Page at 0x1C00 or 0x0C00:
       if (this.chrAddressSelect === 0) {
         this.load1kVromBank(arg, 0x1c00);
       } else {
@@ -1057,10 +1044,6 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
       break;
 
     case this.CMD_SEL_ROM_PAGE2:
-      // Select second switchable ROM page:
-      this.load8kRomBank(arg, 0xa000);
-
-      // hardwire appropriate bank:
       if (this.prgAddressChanged) {
         // Load the two hardwired banks:
         if (this.prgAddressSelect === 0) {
@@ -1070,6 +1053,10 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
         }
         this.prgAddressChanged = false;
       }
+
+      // Select second switchable ROM page:
+      this.load8kRomBank(arg, 0xa000);
+      break;
   }
 };
 
@@ -1097,9 +1084,9 @@ Mappers[4].prototype.loadROM = function () {
 };
 
 Mappers[4].prototype.ppuClockIrqCounter = function () {
-  if (this.irqEnable === 1) {
+  if (this.irqEnable) {
     this.irqCounter--;
-    if (this.irqCounter < 0) {
+    if (this.irqCounter <= 0) {
       // Trigger IRQ:
       //nes.getCpu().doIrq();
       this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
@@ -1113,7 +1100,6 @@ Mappers[4].prototype.toJSON = function () {
   s.command = this.command;
   s.prgAddressSelect = this.prgAddressSelect;
   s.chrAddressSelect = this.chrAddressSelect;
-  s.pageNumber = this.pageNumber;
   s.irqCounter = this.irqCounter;
   s.irqLatchValue = this.irqLatchValue;
   s.irqEnable = this.irqEnable;
@@ -1126,7 +1112,6 @@ Mappers[4].prototype.fromJSON = function (s) {
   this.command = s.command;
   this.prgAddressSelect = s.prgAddressSelect;
   this.chrAddressSelect = s.chrAddressSelect;
-  this.pageNumber = s.pageNumber;
   this.irqCounter = s.irqCounter;
   this.irqLatchValue = s.irqLatchValue;
   this.irqEnable = s.irqEnable;

@@ -1563,7 +1563,7 @@ Mappers[22].prototype.write = function (address, value) {
     // PRG Select 1
     this.load8kRomBank((value & 0x1f), 0xa000);
   } else if (address <= 0xbfff) {
-    if (address & 2) {
+    if (((address & 3) === 1) || ((address & 3) === 3)) {
       // CHR Select 1
       this.updateCHR(1, address, value);
     } else {
@@ -1571,7 +1571,7 @@ Mappers[22].prototype.write = function (address, value) {
       this.updateCHR(0, address, value);
     }
   } else if (address <= 0xcfff) {
-    if (address & 2) {
+    if (((address & 3) === 1) || ((address & 3) === 3)) {
       // CHR Select 3
       this.updateCHR(3, address, value);
     } else {
@@ -1579,7 +1579,7 @@ Mappers[22].prototype.write = function (address, value) {
       this.updateCHR(2, address, value);
     }
   } else if (address <= 0xdfff) {
-    if (address & 2) {
+    if (((address & 3) === 1) || ((address & 3) === 3)) {
       // CHR Select 5
       this.updateCHR(5, address, value);
     } else {
@@ -1587,7 +1587,7 @@ Mappers[22].prototype.write = function (address, value) {
       this.updateCHR(4, address, value);
     }
   } else if (address <= 0xefff) {
-    if (address & 2) {
+    if (((address & 3) === 1) || ((address & 3) === 3)) {
       // CHR Select 7
       this.updateCHR(7, address, value);
     } else {
@@ -1600,11 +1600,9 @@ Mappers[22].prototype.write = function (address, value) {
 };
 
 Mappers[22].prototype.updateCHR = function(index, address, value) {
-  if (address & 1) {
-    // Odd - High
+  if (address & 2) {
     this.chrSelect[index] = (this.chrSelect[index] & 0x0f) | ((value & 0x1f) << 4);
   } else {
-    // Even - Low
     this.chrSelect[index] = (this.chrSelect[index] & 0x1f0) | (value & 0xf);
   }
   this.load1kVromBank((this.chrSelect[index] >> 1), index * 0x400);

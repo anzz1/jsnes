@@ -984,18 +984,18 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
     case this.CMD_SEL_2K_VROM_0000:
       // Select 2K VROM page at 0x0000 or 0x1000:
       if (this.chrAddressSelect === 0) {
-        this.load2kVromBank(arg / 2, 0x0000);
+        this.load2kVromBank(arg >> 1, 0x0000);
       } else {
-        this.load2kVromBank(arg / 2, 0x1000);
+        this.load2kVromBank(arg >> 1, 0x1000);
       }
       break;
 
     case this.CMD_SEL_2K_VROM_0800:
       // Select 2K VROM page at 0x0800 or 0x1800:
       if (this.chrAddressSelect === 0) {
-        this.load2kVromBank(arg / 2, 0x0800);
+        this.load2kVromBank(arg >> 1, 0x0800);
       } else {
-        this.load2kVromBank(arg / 2, 0x1800);
+        this.load2kVromBank(arg >> 1, 0x1800);
       }
       break;
 
@@ -1530,6 +1530,102 @@ Mappers[11].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 022 (Konami VRC2a)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_022
+ * @example Ganbare Pennant Race!, TwinBee 3: Poko Poko Dai Maou
+ * @constructor
+ */
+Mappers[22] = function (nes) {
+  this.nes = nes;
+  
+  this.chrSelect = new Array(8);
+};
+
+Mappers[22].prototype = new Mappers[0]();
+
+Mappers[22].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.chrSelect.fill(0);
+};
+
+Mappers[22].prototype.write = function (address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else if (address <= 0x8fff) {
+    // PRG Select 0
+    this.load8kRomBank((value & 0x1f), 0x8000);
+  } else if (address <= 0x9fff) {
+    // Mirroring control
+    this.nes.ppu.setMirroring(value & 1); // vertical / horizontal
+  } else if (address <= 0xafff) {
+    // PRG Select 1
+    this.load8kRomBank((value & 0x1f), 0xa000);
+  } else if (address <= 0xbfff) {
+    if (address & 2) {
+      // CHR Select 1
+      this.updateCHR(1, address, value);
+    } else {
+      // CHR Select 0
+      this.updateCHR(0, address, value);
+    }
+  } else if (address <= 0xcfff) {
+    if (address & 2) {
+      // CHR Select 3
+      this.updateCHR(3, address, value);
+    } else {
+      // CHR Select 2
+      this.updateCHR(2, address, value);
+    }
+  } else if (address <= 0xdfff) {
+    if (address & 2) {
+      // CHR Select 5
+      this.updateCHR(5, address, value);
+    } else {
+      // CHR Select 4
+      this.updateCHR(4, address, value);
+    }
+  } else if (address <= 0xefff) {
+    if (address & 2) {
+      // CHR Select 7
+      this.updateCHR(7, address, value);
+    } else {
+      // CHR Select 6
+      this.updateCHR(6, address, value);
+    }
+  } else {
+    throw new Error("VRC2a: Unimplemented write $" + address.toString(16) + " = " + value.toString(16));
+  }
+};
+
+Mappers[22].prototype.updateCHR = function(index, address, value) {
+  if (address & 1) {
+    // Odd - High
+    this.chrSelect[index] = (this.chrSelect[index] & 0x0f) | ((value & 0x1f) << 4);
+  } else {
+    // Even - Low
+    this.chrSelect[index] = (this.chrSelect[index] & 0x1f0) | (value & 0xf);
+  }
+  this.load1kVromBank((this.chrSelect[index] >> 1), index * 0x400);
+}
+
+Mappers[22].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("VRC2a: Invalid ROM! Unable to load.");
+  }
+
+  // Load hardwired PRG bank (0xC000):
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
  * Mapper 034 (BNROM, NINA-01)
  *
  * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_034
@@ -1631,7 +1727,6 @@ Mappers[66].prototype.write = function (address, value) {
   this.CMD_IRQ_COUNTER_HIGH = 15;
 
   this.command = null;
-  this.mirroring = null;
   this.irqCounter = null;
   this.irqEnable = null;
   this.irqEnableCounter = null;
@@ -1650,7 +1745,6 @@ Mappers[69].prototype = new Mappers[0]();
 Mappers[69].prototype.reset = function () {
   Mappers[0].prototype.reset.apply();
   this.command = null;
-  this.mirroring = null;
   this.irqCounter = null;
   this.irqEnable = null;
   this.irqEnableCounter = null;
@@ -1768,10 +1862,7 @@ Mappers[69].prototype.executeCommand = function (cmd, arg) {
           tmp = this.nes.rom.SINGLESCREEN_MIRRORINGB;
           break;
       }
-      if (tmp !== this.mirroring) {
-        this.mirroring = tmp;
-        this.nes.ppu.setMirroring(this.mirroring);
-      }
+      this.nes.ppu.setMirroring(tmp);
       break;
 
     case this.CMD_IRQ_CONTROL:
@@ -1833,7 +1924,6 @@ Mappers[69].prototype.cpuClockIrqCounter = function () {
 Mappers[69].prototype.toJSON = function () {
   var s = Mappers[0].prototype.toJSON.apply(this);
   s.command = this.command;
-  s.mirroring = this.mirroring;
   s.irqCounter = this.irqCounter;
   s.irqEnable = this.irqEnable;
   s.irqEnableCounter = this.irqEnableCounter;
@@ -1846,7 +1936,6 @@ Mappers[69].prototype.toJSON = function () {
 Mappers[69].prototype.fromJSON = function (s) {
   Mappers[0].prototype.fromJSON.apply(this, arguments);
   this.command = s.command;
-  this.mirroring = s.mirroring;
   this.irqCounter = s.irqCounter;
   this.irqEnable = s.irqEnable;
   this.irqEnableCounter = s.irqEnableCounter;
@@ -1916,9 +2005,7 @@ Mappers[73].prototype.write = function (address, value) {
     }
   } else if (address <= 0xdfff) {
     // IRQ Acknowledge ($D000-$DFFF)
-    if (this.irqEnableOnAck) {
-      this.irqEnable = true;
-    }
+    this.irqEnable = this.irqEnableOnAck;
     this.nes.cpu.clearIrq();
   } else if (address >= 0xf000) {
     // Bank select ($F000-$FFFF)
@@ -2041,15 +2128,9 @@ Mappers[87].prototype.write = function (address, value) {
  */
 Mappers[89] = function (nes) {
   this.nes = nes;
-  this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGA;
 };
 
 Mappers[89].prototype = new Mappers[0]();
-
-Mappers[89].prototype.reset = function () {
-  Mappers[0].prototype.reset.apply();
-  this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGA;
-}
 
 Mappers[89].prototype.write = function (address, value) {
   if (address < 0x8000) {
@@ -2063,11 +2144,10 @@ Mappers[89].prototype.write = function (address, value) {
     this.load8kVromBank((value & 7) * 2, 0x0000);
 
     if ((address & 8) !== 0) {
-      this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGA;
+      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
     } else {
-      this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGB;
+      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGB);
     }
-    this.nes.ppu.setMirroring(this.mirroring);
   }
 };
 
@@ -2137,15 +2217,9 @@ Mappers[94].prototype.loadROM = function () {
  */
  Mappers[97] = function (nes) {
   this.nes = nes;
-  this.mirroring = null;
 };
 
 Mappers[97].prototype = new Mappers[0]();
-
-Mappers[97].prototype.reset = function () {
-  Mappers[0].prototype.reset.apply();
-  this.mirroring = null;
-}
 
 Mappers[97].prototype.write = function (address, value) {
   if (address < 0x8000 || address > 0xbfff) {
@@ -2153,11 +2227,7 @@ Mappers[97].prototype.write = function (address, value) {
     return;
   } else {
     this.loadRomBank((value & 0x1f), 0xc000);
-    var m = ((value >> 7) & 1) !== 1;
-    if (this.mirroring !== m) {
-      this.nes.ppu.setMirroring(m);
-      this.mirroring = m;
-    }
+    this.nes.ppu.setMirroring(((value >> 7) & 1) !== 1);
   }
 };
 

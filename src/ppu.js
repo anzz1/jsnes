@@ -68,7 +68,6 @@ var PPU = function (nes) {
   this.imgPalette = null;
   this.ptTile = null;
   this.ntable1 = null;
-  this.currentMirroring = null;
   this.nameTable = null;
   this.vramMirrorTable = null;
   this.palTable = null;

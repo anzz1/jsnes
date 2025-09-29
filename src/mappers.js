@@ -944,11 +944,7 @@ Mappers[4].prototype.write = function (address, value) {
 
     case 0xa000:
       // Mirroring select
-      if ((value & 1) !== 0) {
-        this.nes.ppu.setMirroring(this.nes.rom.HORIZONTAL_MIRRORING);
-      } else {
-        this.nes.ppu.setMirroring(this.nes.rom.VERTICAL_MIRRORING);
-      }
+      this.nes.ppu.setMirroring(value & 1); // vertical / horizontal
       break;
 
     case 0xa001:
@@ -1530,6 +1526,187 @@ Mappers[11].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 021 (Konami VRC4a/VRC4c)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_021
+ * @example Ganbare Goemon Gaiden 2: Tenka no Zaihou
+ * @constructor
+ */
+ Mappers[21] = function (nes) {
+  this.nes = nes;
+
+  this.IRQ_MODE_SCANLINE = 0;
+  this.IRQ_MODE_CYCLE = 1;
+
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.irqScn = 341;
+  this.prgBank0 = 0;
+  this.prgAddressSelect = 0;
+  this.chrSelect = new Array(8);
+};
+
+Mappers[21].prototype = new Mappers[0]();
+
+Mappers[21].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.irqScn = 341;
+  this.prgBank0 = 0;
+  this.prgAddressSelect = 0;
+  this.chrSelect.fill(0);
+};
+
+Mappers[21].prototype.write = function (address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else if (address <= 0x8fff) {
+    // PRG Select 0
+    this.prgBank0 = (value & 0x1f);
+    if (this.prgAddressSelect === 0) {
+      this.load8kRomBank(this.prgBank0, 0x8000);
+    } else {
+      this.load8kRomBank(this.prgBank0, 0xc000);
+    }
+  } else if (address <= 0x9fff) {
+    if (((address & 3) === 2) || ((address & 0xc0) === 0x40)) {
+      // PRG Swap
+      var tmp = (value >> 1) & 1;
+      if (tmp !== this.prgAddressSelect) {
+        this.prgAddressSelect = tmp;
+        if (this.prgAddressSelect === 0) {
+          this.load8kRomBank(this.prgBank0, 0x8000);
+          this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
+        } else {
+          this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0x8000);
+          this.load8kRomBank(this.prgBank0, 0xc000);
+        }
+      }
+    } else {
+      // Mirroring control
+      switch (value & 3) {
+        case 0:
+          this.nes.ppu.setMirroring(this.nes.rom.VERTICAL_MIRRORING);
+          break;
+        case 1:
+          this.nes.ppu.setMirroring(this.nes.rom.HORIZONTAL_MIRRORING);
+          break;
+        case 2:
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
+          break;
+        case 3:
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGB);
+          break;
+      }
+    }
+  } else if (address <= 0xafff) {
+    // PRG Select 1
+    this.load8kRomBank((value & 0x1f), 0xa000);
+  } else if (address <= 0xbfff) {
+    if ((address & 4) || (address & 0x80)) {
+      // CHR Select 1
+      this.updateCHR(1, address, value);
+    } else {
+      // CHR Select 0
+      this.updateCHR(0, address, value);
+    }
+  } else if (address <= 0xcfff) {
+    if ((address & 4) || (address & 0x80)) {
+      // CHR Select 3
+      this.updateCHR(3, address, value);
+    } else {
+      // CHR Select 2
+      this.updateCHR(2, address, value);
+    }
+  } else if (address <= 0xdfff) {
+    if ((address & 4) || (address & 0x80)) {
+      // CHR Select 5
+      this.updateCHR(5, address, value);
+    } else {
+      // CHR Select 4
+      this.updateCHR(4, address, value);
+    }
+  } else if (address <= 0xefff) {
+    if ((address & 4) || (address & 0x80)) {
+      // CHR Select 7
+      this.updateCHR(7, address, value);
+    } else {
+      // CHR Select 6
+      this.updateCHR(6, address, value);
+    }
+  } else if (((address & 6) === 6) || ((address & 0xc0) === 0xc0)) {
+    // IRQ Acknowledge
+    this.irqEnable = this.irqEnableOnAck;
+    this.nes.cpu.clearIrq();
+  } else if ((address & 4) || (address & 0x80)) {
+    // IRQ Control
+    this.irqEnableOnAck = !!(value & 1);
+    this.irqEnable = !!(value & 2);
+    this.irqMode = (value >> 2) & 1;
+    if (this.irqEnable) {
+      this.irqCounter = this.irqLatchValue;
+      this.irqScn = 341;
+    }
+  } else if ((address & 2) || (address & 0x40)) {
+    // IRQ Latch Bits 4-7
+    this.irqLatchValue = (this.irqLatchValue & 0x0f) | ((value & 0xf) << 4);
+  } else {
+    // IRQ Latch Bits 0-3
+    this.irqLatchValue = (this.irqLatchValue & 0xf0) | (value & 0xf);
+  }
+};
+
+Mappers[21].prototype.updateCHR = function(index, address, value) {
+  if ((address & 2) || (address & 0x40)) {
+    this.chrSelect[index] = (this.chrSelect[index] & 0x0f) | ((value & 0x1f) << 4);
+  } else {
+    this.chrSelect[index] = (this.chrSelect[index] & 0x1f0) | (value & 0xf);
+  }
+  this.load1kVromBank(this.chrSelect[index], index * 0x400);
+}
+
+Mappers[21].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("VRC4a: Invalid ROM! Unable to load.");
+  }
+
+  // Load hardwired PRG bank (0xC000):
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[21].prototype.cpuClockIrqCounter = function () {
+  if (this.irqEnable) {
+    if (this.irqMode === this.IRQ_MODE_CYCLE) {
+      this.irqCounter++;
+    } else if (this.irqMode === this.IRQ_MODE_SCANLINE) {
+      this.irqScn -= 3;
+      if (this.irqScn <= 0) {
+        this.irqScn += 341;
+        this.irqCounter++;
+      }
+    }
+    if (this.irqCounter > 0xFF) {
+      this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+      this.irqCounter = this.irqLatchValue;
+    }
+  }
+};
+
+/**
  * Mapper 022 (Konami VRC2a)
  *
  * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_022
@@ -1621,6 +1798,368 @@ Mappers[22].prototype.loadROM = function () {
 
   // Do Reset-Interrupt:
   this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
+ * Mapper 023 (Konami VRC2b/VRC4f/VRC4e)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_023
+ * @example Contra, Crisis Force, Ganbare Goemon 2, Tiny Toon Adentures
+ * @constructor
+ */
+ Mappers[23] = function (nes) {
+  this.nes = nes;
+
+  this.IRQ_MODE_SCANLINE = 0;
+  this.IRQ_MODE_CYCLE = 1;
+
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.irqScn = 341;
+  this.prgBank0 = 0;
+  this.prgAddressSelect = 0;
+  this.chrSelect = new Array(8);
+};
+
+Mappers[23].prototype = new Mappers[0]();
+
+Mappers[23].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.irqScn = 341;
+  this.prgBank0 = 0;
+  this.prgAddressSelect = 0;
+  this.chrSelect.fill(0);
+};
+
+Mappers[23].prototype.write = function (address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else if (address <= 0x8fff) {
+    // PRG Select 0
+    this.prgBank0 = (value & 0x1f);
+    if (this.prgAddressSelect === 0) {
+      this.load8kRomBank(this.prgBank0, 0x8000);
+    } else {
+      this.load8kRomBank(this.prgBank0, 0xc000);
+    }
+  } else if (address <= 0x9fff) {
+    if (((address & 3) === 2) || ((address & 0xc) === 8)) {
+      // PRG Swap
+      var tmp = (value >> 1) & 1;
+      if (tmp !== this.prgAddressSelect) {
+        this.prgAddressSelect = tmp;
+        if (this.prgAddressSelect === 0) {
+          this.load8kRomBank(this.prgBank0, 0x8000);
+          this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
+        } else {
+          this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0x8000);
+          this.load8kRomBank(this.prgBank0, 0xc000);
+        }
+      }
+    } else {
+      // Mirroring control
+      switch (value & 3) {
+        case 0:
+          this.nes.ppu.setMirroring(this.nes.rom.VERTICAL_MIRRORING);
+          break;
+        case 1:
+          this.nes.ppu.setMirroring(this.nes.rom.HORIZONTAL_MIRRORING);
+          break;
+        case 2:
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
+          break;
+        case 3:
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGB);
+          break;
+      }
+    }
+  } else if (address <= 0xafff) {
+    // PRG Select 1
+    this.load8kRomBank((value & 0x1f), 0xa000);
+  } else if (address <= 0xbfff) {
+    if ((address & 2) || (address & 8)) {
+      // CHR Select 1
+      this.updateCHR(1, address, value);
+    } else {
+      // CHR Select 0
+      this.updateCHR(0, address, value);
+    }
+  } else if (address <= 0xcfff) {
+    if ((address & 2) || (address & 8)) {
+      // CHR Select 3
+      this.updateCHR(3, address, value);
+    } else {
+      // CHR Select 2
+      this.updateCHR(2, address, value);
+    }
+  } else if (address <= 0xdfff) {
+    if ((address & 2) || (address & 8)) {
+      // CHR Select 5
+      this.updateCHR(5, address, value);
+    } else {
+      // CHR Select 4
+      this.updateCHR(4, address, value);
+    }
+  } else if (address <= 0xefff) {
+    if ((address & 2) || (address & 8)) {
+      // CHR Select 7
+      this.updateCHR(7, address, value);
+    } else {
+      // CHR Select 6
+      this.updateCHR(6, address, value);
+    }
+  } else if (((address & 3) === 3) || ((address & 0xc) === 0xc)) {
+    // IRQ Acknowledge
+    this.irqEnable = this.irqEnableOnAck;
+    this.nes.cpu.clearIrq();
+  } else if ((address & 2) || (address & 8)) {
+    // IRQ Control
+    this.irqEnableOnAck = !!(value & 1);
+    this.irqEnable = !!(value & 2);
+    this.irqMode = (value >> 2) & 1;
+    if (this.irqEnable) {
+      this.irqCounter = this.irqLatchValue;
+      this.irqScn = 341;
+    }
+  } else if ((address & 1) || (address & 4)) {
+    // IRQ Latch Bits 4-7
+    this.irqLatchValue = (this.irqLatchValue & 0x0f) | ((value & 0xf) << 4);
+  } else {
+    // IRQ Latch Bits 0-3
+    this.irqLatchValue = (this.irqLatchValue & 0xf0) | (value & 0xf);
+  }
+};
+
+Mappers[23].prototype.updateCHR = function(index, address, value) {
+  if ((address & 1) || (address & 4)) {
+    this.chrSelect[index] = (this.chrSelect[index] & 0x0f) | ((value & 0x1f) << 4);
+  } else {
+    this.chrSelect[index] = (this.chrSelect[index] & 0x1f0) | (value & 0xf);
+  }
+  this.load1kVromBank(this.chrSelect[index], index * 0x400);
+}
+
+Mappers[23].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("VRC4f: Invalid ROM! Unable to load.");
+  }
+
+  // Load hardwired PRG bank (0xC000):
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[23].prototype.cpuClockIrqCounter = function () {
+  if (this.irqEnable) {
+    if (this.irqMode === this.IRQ_MODE_CYCLE) {
+      this.irqCounter++;
+    } else if (this.irqMode === this.IRQ_MODE_SCANLINE) {
+      this.irqScn -= 3;
+      if (this.irqScn <= 0) {
+        this.irqScn += 341;
+        this.irqCounter++;
+      }
+    }
+    if (this.irqCounter > 0xFF) {
+      this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+      this.irqCounter = this.irqLatchValue;
+    }
+  }
+};
+
+/**
+ * Mapper 025 (Konami VRC2c/VRC4b/VRC4d)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_025
+ * @example Ganbare Goemon Gaiden: Keita Ougon Kiseru, Gradius II
+ * @constructor
+ */
+ Mappers[25] = function (nes) {
+  this.nes = nes;
+
+  this.IRQ_MODE_SCANLINE = 0;
+  this.IRQ_MODE_CYCLE = 1;
+
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.irqScn = 341;
+  this.prgBank0 = 0;
+  this.prgAddressSelect = 0;
+  this.chrSelect = new Array(8);
+};
+
+Mappers[25].prototype = new Mappers[0]();
+
+Mappers[25].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.irqScn = 341;
+  this.prgBank0 = 0;
+  this.prgAddressSelect = 0;
+  this.chrSelect.fill(0);
+};
+
+Mappers[25].prototype.write = function (address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+    return;
+  } else if (address <= 0x8fff) {
+    // PRG Select 0
+    this.prgBank0 = (value & 0x1f);
+    if (this.prgAddressSelect === 0) {
+      this.load8kRomBank(this.prgBank0, 0x8000);
+    } else {
+      this.load8kRomBank(this.prgBank0, 0xc000);
+    }
+  } else if (address <= 0x9fff) {
+    if (((address & 3) === 1) || ((address & 0xc) === 4)) {
+      // PRG Swap
+      var tmp = (value >> 1) & 1;
+      if (tmp !== this.prgAddressSelect) {
+        this.prgAddressSelect = tmp;
+        if (this.prgAddressSelect === 0) {
+          this.load8kRomBank(this.prgBank0, 0x8000);
+          this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
+        } else {
+          this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0x8000);
+          this.load8kRomBank(this.prgBank0, 0xc000);
+        }
+      }
+    } else {
+      // Mirroring control
+      switch (value & 3) {
+        case 0:
+          this.nes.ppu.setMirroring(this.nes.rom.VERTICAL_MIRRORING);
+          break;
+        case 1:
+          this.nes.ppu.setMirroring(this.nes.rom.HORIZONTAL_MIRRORING);
+          break;
+        case 2:
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
+          break;
+        case 3:
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGB);
+          break;
+      }
+    }
+  } else if (address <= 0xafff) {
+    // PRG Select 1
+    this.load8kRomBank((value & 0x1f), 0xa000);
+  } else if (address <= 0xbfff) {
+    if (((address & 3) === 1) || ((address & 3) === 3) || (address & 4)) {
+      // CHR Select 1
+      this.updateCHR(1, address, value);
+    } else {
+      // CHR Select 0
+      this.updateCHR(0, address, value);
+    }
+  } else if (address <= 0xcfff) {
+    if (((address & 3) === 1) || ((address & 3) === 3) || (address & 4)) {
+      // CHR Select 3
+      this.updateCHR(3, address, value);
+    } else {
+      // CHR Select 2
+      this.updateCHR(2, address, value);
+    }
+  } else if (address <= 0xdfff) {
+    if (((address & 3) === 1) || ((address & 3) === 3) || (address & 4)) {
+      // CHR Select 5
+      this.updateCHR(5, address, value);
+    } else {
+      // CHR Select 4
+      this.updateCHR(4, address, value);
+    }
+  } else if (address <= 0xefff) {
+    if (((address & 3) === 1) || ((address & 3) === 3) || (address & 4)) {
+      // CHR Select 7
+      this.updateCHR(7, address, value);
+    } else {
+      // CHR Select 6
+      this.updateCHR(6, address, value);
+    }
+  } else if (((address & 3) === 3) || ((address & 0xc) === 0xc)) {
+    // IRQ Acknowledge
+    this.irqEnable = this.irqEnableOnAck;
+    this.nes.cpu.clearIrq();
+  } else if ((address & 1) || (address & 4)) {
+    // IRQ Control
+    this.irqEnableOnAck = !!(value & 1);
+    this.irqEnable = !!(value & 2);
+    this.irqMode = (value >> 2) & 1;
+    if (this.irqEnable) {
+      this.irqCounter = this.irqLatchValue;
+      this.irqScn = 341;
+    }
+  } else if ((address & 2) || (address & 8)) {
+    // IRQ Latch Bits 4-7
+    this.irqLatchValue = (this.irqLatchValue & 0x0f) | ((value & 0xf) << 4);
+  } else {
+    // IRQ Latch Bits 0-3
+    this.irqLatchValue = (this.irqLatchValue & 0xf0) | (value & 0xf);
+  }
+};
+
+Mappers[25].prototype.updateCHR = function(index, address, value) {
+  if ((address & 2) || (address & 8)) {
+    this.chrSelect[index] = (this.chrSelect[index] & 0x0f) | ((value & 0x1f) << 4);
+  } else {
+    this.chrSelect[index] = (this.chrSelect[index] & 0x1f0) | (value & 0xf);
+  }
+  this.load1kVromBank(this.chrSelect[index], index * 0x400);
+}
+
+Mappers[25].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("VRC4b: Invalid ROM! Unable to load.");
+  }
+
+  // Load hardwired PRG bank (0xC000):
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[25].prototype.cpuClockIrqCounter = function () {
+  if (this.irqEnable) {
+    if (this.irqMode === this.IRQ_MODE_CYCLE) {
+      this.irqCounter++;
+    } else if (this.irqMode === this.IRQ_MODE_SCANLINE) {
+      this.irqScn -= 3;
+      if (this.irqScn <= 0) {
+        this.irqScn += 341;
+        this.irqCounter++;
+      }
+    }
+    if (this.irqCounter > 0xFF) {
+      this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+      this.irqCounter = this.irqLatchValue;
+    }
+  }
 };
 
 /**

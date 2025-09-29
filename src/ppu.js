@@ -265,8 +265,8 @@ PPU.prototype = {
 
       this.defineMirrorRegion(0x2800, 0x2000, 0x400);
       this.defineMirrorRegion(0x2c00, 0x2400, 0x400);
-    } else if (mirroring === this.nes.rom.SINGLESCREEN_MIRRORING) {
-      // Single Screen mirroring
+    } else if (mirroring === this.nes.rom.SINGLESCREEN_MIRRORINGA) {
+      // Single Screen mirroring A
 
       this.ntable1[0] = 0;
       this.ntable1[1] = 0;
@@ -276,7 +276,9 @@ PPU.prototype = {
       this.defineMirrorRegion(0x2400, 0x2000, 0x400);
       this.defineMirrorRegion(0x2800, 0x2000, 0x400);
       this.defineMirrorRegion(0x2c00, 0x2000, 0x400);
-    } else if (mirroring === this.nes.rom.SINGLESCREEN_MIRRORING2) {
+    } else if (mirroring === this.nes.rom.SINGLESCREEN_MIRRORINGB) {
+      // Single Screen mirroring B
+
       this.ntable1[0] = 1;
       this.ntable1[1] = 1;
       this.ntable1[2] = 1;

@@ -25,6 +25,8 @@ function audio_remain(){
 }
 
 function audio_callback(event){
+	if (nes.break) return;
+
 	var dst = event.outputBuffer;
 	var len = dst.length;
 

@@ -104,11 +104,20 @@ var PAPU = function (nes) {
 PAPU.prototype = {
   reset: function () {
     this.sampleRate = this.nes.opts.sampleRate;
-    this.sampleTimerMax = Math.floor(
-      (1024.0 * (this.nes.opts.mode === this.nes.MODE_PAL ? CPU_FREQ_PAL : CPU_FREQ_NTSC)) / this.sampleRate
-    );
 
-    this.frameTime = (this.nes.opts.mode === this.nes.MODE_PAL ? APU_TO_CPU_CYCLE_PAL : APU_TO_CPU_CYCLE_NTSC);
+    if (this.nes.opts.mode === this.nes.MODE_PAL) {
+      // PAL
+      this.sampleTimerMax = Math.floor(
+        (1024.0 * CPU_FREQ_PAL / this.sampleRate) * (5 / 6)
+      );
+      this.frameTime = APU_TO_CPU_CYCLE_PAL;
+    } else {
+      // NTSC
+      this.sampleTimerMax = Math.floor(
+        (1024.0 * CPU_FREQ_NTSC / this.sampleRate)
+      );
+      this.frameTime = APU_TO_CPU_CYCLE_NTSC;
+    }
 
     this.sampleTimer = 0;
 
@@ -767,7 +776,7 @@ PAPU.prototype = {
   ],
 
   toJSON: function () {
-    let obj = utils.toJSON(this);
+    var obj = utils.toJSON(this);
     obj.dmc = this.dmc.toJSON();
     obj.noise = this.noise.toJSON();
     obj.square1 = this.square1.toJSON();

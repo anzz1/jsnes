@@ -151,6 +151,7 @@ NES.prototype = {
     } catch (error) {
       console.error(error);
       this.mmap = null;
+      this.break = true;
     }
   },
 

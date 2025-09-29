@@ -507,7 +507,7 @@ Mappers[0].prototype = {
   },
 
   cpuClockIrqCounter: function () {
-    // Does nothing. This is used by the VRC3 and Kaiser KS202 mappers.
+    // Does nothing. This is used by the VRC3, KS202 and FME-7 mappers.
   },
 
   // eslint-disable-next-line no-unused-vars
@@ -626,7 +626,7 @@ Mappers[1].prototype.setReg = function (reg, value) {
         this.mirroring = tmp;
         if ((this.mirroring & 2) === 0) {
           // SingleScreen mirroring overrides the other setting:
-          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORING);
+          this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
         } else if ((this.mirroring & 1) !== 0) {
           // Not overridden by SingleScreen mirroring.
           this.nes.ppu.setMirroring(this.nes.rom.HORIZONTAL_MIRRORING);
@@ -907,6 +907,17 @@ Mappers[4] = function (nes) {
 
 Mappers[4].prototype = new Mappers[0]();
 
+Mappers[4].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.command = null;
+  this.prgAddressSelect = null;
+  this.chrAddressSelect = null;
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.prgAddressChanged = false;
+};
+
 Mappers[4].prototype.write = function (address, value) {
   // Writes to addresses other than MMC registers are handled by NoMapper.
   if (address < 0x8000) {
@@ -1026,7 +1037,7 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
 
     case this.CMD_SEL_ROM_PAGE1:
       if (this.prgAddressChanged) {
-        // Load the two hardwired banks:
+        // Load the fixed bank:
         if (this.prgAddressSelect === 0) {
           this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
         } else {
@@ -1045,7 +1056,7 @@ Mappers[4].prototype.executeCommand = function (cmd, arg) {
 
     case this.CMD_SEL_ROM_PAGE2:
       if (this.prgAddressChanged) {
-        // Load the two hardwired banks:
+        // Load the fixed bank:
         if (this.prgAddressSelect === 0) {
           this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
         } else {
@@ -1065,7 +1076,7 @@ Mappers[4].prototype.loadROM = function () {
     throw new Error("MMC3: Invalid ROM! Unable to load.");
   }
 
-  // Load hardwired PRG banks (0xC000 and 0xE000):
+  // Load fixed PRG banks (0xC000 and 0xE000):
   this.load8kRomBank((this.nes.rom.romCount - 1) * 2, 0xc000);
   this.load8kRomBank((this.nes.rom.romCount - 1) * 2 + 1, 0xe000);
 
@@ -1181,13 +1192,13 @@ Mappers[5].prototype.write = function (address, value) {
   }
   else if (address >= 0x5114 && address <= 0x5117) {
     // PRG bank registers
-    let reg = address - 0x5114;
+    var reg = address - 0x5114;
     this.prgRegs[reg] = value & 0x7f;
     this.updatePRGBanks();
   }
   else if (address >= 0x5120 && address <= 0x512B) {
     // CHR bank registers (up to 12 of them)
-    let reg = address - 0x5120;
+    var reg = address - 0x5120;
     this.chrRegs[reg] = value & 0x7f;
     this.updateCHRBanks();
   }
@@ -1227,12 +1238,12 @@ Mappers[5].prototype.updateCHRBanks = function() {
       this.loadVromBank(this.chrRegs[7] >> 2, 0x1000);
       break;
     case 2: // 2K + 2K + 2K + 2K
-      for (let i = 0; i < 4; i++) {
+      for (var i = 0; i < 4; i++) {
         this.load2kVromBank(this.chrRegs[i*2] >> 1, 0x0000 + i*0x0800);
       }
       break;
     case 3: // 1K + 1K + 1K + 1K + 1K + 1K + 1K + 1K
-      for (let i = 0; i < 8; i++) {
+      for (var i = 0; i < 8; i++) {
         this.load1kVromBank(this.chrRegs[i], 0x0000 + i*0x0400);
       }
       break;
@@ -1290,9 +1301,9 @@ Mappers[7].prototype.write = function (address, value) {
   } else {
     this.load32kRomBank(value & 0x7, 0x8000);
     if (value & 0x10) {
-      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORING2);
+      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGB);
     } else {
-      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORING);
+      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
     }
   }
 };
@@ -1403,7 +1414,7 @@ Mappers[9].prototype.write = function (address, value) {
     this.needsChrUpdateR = false;
   } else {
     // Mirroring ($F000-$FFFF)
-    let m = (address & 1);
+    var m = (address & 1);
     if (this.mirroring !== m) {
       this.nes.ppu.setMirroring(m);
       this.mirroring = m;
@@ -1593,6 +1604,258 @@ Mappers[66].prototype.write = function (address, value) {
 };
 
 /**
+ * Mapper 069 (Sunsoft FME-7)
+ *
+ * @description http://wiki.nesdev.com/w/index.php/Sunsoft_FME-7
+ * @example Batman, Batman: Return of the Joker, Gimmick!
+ * @constructor
+ */
+ Mappers[69] = function (nes) {
+  this.nes = nes;
+
+  this.CMD_SEL_1K_VROM_0000 = 0;
+  this.CMD_SEL_1K_VROM_0400 = 1;
+  this.CMD_SEL_1K_VROM_0800 = 2;
+  this.CMD_SEL_1K_VROM_0C00 = 3;
+  this.CMD_SEL_1K_VROM_1000 = 4;
+  this.CMD_SEL_1K_VROM_1400 = 5;
+  this.CMD_SEL_1K_VROM_1800 = 6;
+  this.CMD_SEL_1K_VROM_1C00 = 7;
+  this.CMD_SEL_8K_ROM_6000 = 8;
+  this.CMD_SEL_8K_ROM_8000 = 9;
+  this.CMD_SEL_8K_ROM_A000 = 10;
+  this.CMD_SEL_8K_ROM_C000 = 11;
+  this.CMD_SET_MIRRORING = 12;
+  this.CMD_IRQ_CONTROL = 13;
+  this.CMD_IRQ_COUNTER_LOW = 14;
+  this.CMD_IRQ_COUNTER_HIGH = 15;
+
+  this.command = null;
+  this.mirroring = null;
+  this.irqCounter = null;
+  this.irqEnable = null;
+  this.irqEnableCounter = null;
+  this.wramSelect = null;
+  this.wramEnable = null;
+  this.wramBank = null;
+
+  this.wram8K = new Array(64);
+  for (var i = 0; i < 64; i++) {
+    this.wram8K[i] = new Array(0x2000);
+  }
+};
+
+Mappers[69].prototype = new Mappers[0]();
+
+Mappers[69].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.command = null;
+  this.mirroring = null;
+  this.irqCounter = null;
+  this.irqEnable = null;
+  this.irqEnableCounter = null;
+  this.wramSelect = null;
+  this.wramEnable = null;
+  this.wramBank = null;
+  for (var i = 0; i < 64; i++) {
+    this.wram8K[i].fill(0);
+  }
+}
+
+Mappers[69].prototype.write = function (address, value) {
+  if (address < 0x6000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+  } else if (address < 0x8000) {
+    // WRAM/ROM ($6000-$7FFF)
+    if (this.wramSelect) {
+      this.wram8K[this.wramBank][address & 0x1fff] = value;
+      if (this.nes.rom.batteryRam) {
+        this.nes.opts.onBatteryRamWrite(address, value);
+      }
+    }
+  } else if (address < 0xa000) {
+    // Command register ($8000-$9FFF)
+    this.command = (value & 0xf);
+  } else if (address < 0xc000) {
+    // Parameter register ($A000-$BFFF)
+    this.executeCommand(this.command, value);
+  } else {
+    // Sunsoft 5B audio($C000-$FFFF)
+    throw new Error("FME-7: Unimplemented write $" + address.toString(16) + " = " + value.toString(16));
+  }
+};
+
+Mappers[69].prototype.load = function (address) {
+  // Wrap around:
+  address &= 0xffff;
+
+  if (!this.wramSelect || address < 0x6000 || address > 0x7fff) {
+    return Mappers[0].prototype.load.apply(this, arguments);
+  } else {
+    // WRAM ($6000-$7FFF)
+    return this.wram8K[this.wramBank][address & 0x1fff];
+  }
+};
+
+Mappers[69].prototype.executeCommand = function (cmd, arg) {
+  switch (cmd) {
+    case this.CMD_SEL_1K_VROM_0000:
+      this.load1kVromBank(arg, 0x0000);
+      break;
+
+    case this.CMD_SEL_1K_VROM_0400:
+      this.load1kVromBank(arg, 0x0400);
+      break;
+
+    case this.CMD_SEL_1K_VROM_0800:
+      this.load1kVromBank(arg, 0x0800);
+      break;
+
+    case this.CMD_SEL_1K_VROM_0C00:
+      this.load1kVromBank(arg, 0x0c00);
+      break;
+
+    case this.CMD_SEL_1K_VROM_1000:
+      this.load1kVromBank(arg, 0x1000);
+      break;
+
+    case this.CMD_SEL_1K_VROM_1400:
+      this.load1kVromBank(arg, 0x1400);
+      break;
+
+    case this.CMD_SEL_1K_VROM_1800:
+      this.load1kVromBank(arg, 0x1800);
+      break;
+
+    case this.CMD_SEL_1K_VROM_1C00:
+      this.load1kVromBank(arg, 0x1c00);
+      break;
+
+    case this.CMD_SEL_8K_ROM_6000:
+      this.wramSelect = ((arg >> 6) & 1);
+      if (this.wramSelect) {
+        this.wramBank = (arg & 0x3f);
+      } else {
+        this.load8kRomBank((arg & 0x3f), 0x6000);
+      }
+      break;
+
+    case this.CMD_SEL_8K_ROM_8000:
+      this.load8kRomBank((arg & 0x3f), 0x8000);
+      break;
+
+    case this.CMD_SEL_8K_ROM_A000:
+      this.load8kRomBank((arg & 0x3f), 0xa000);
+      break;
+
+    case this.CMD_SEL_8K_ROM_C000:
+      this.load8kRomBank((arg & 0x3f), 0xc000);
+      break;
+
+    case this.CMD_SET_MIRRORING:
+      var tmp;
+      switch (arg & 3) {
+        case 0:
+          tmp = this.nes.rom.VERTICAL_MIRRORING;
+          break;
+        case 1:
+          tmp = this.nes.rom.HORIZONTAL_MIRRORING;
+          break;
+        case 2:
+          tmp = this.nes.rom.SINGLESCREEN_MIRRORINGA;
+          break;
+        case 3:
+          tmp = this.nes.rom.SINGLESCREEN_MIRRORINGB;
+          break;
+      }
+      if (tmp !== this.mirroring) {
+        this.mirroring = tmp;
+        this.nes.ppu.setMirroring(this.mirroring);
+      }
+      break;
+
+    case this.CMD_IRQ_CONTROL:
+      this.irqEnable = (arg & 1);
+      this.irqEnableCounter = ((arg >> 7) & 1);
+      this.nes.cpu.clearIrq();
+      break;
+
+    case this.CMD_IRQ_COUNTER_LOW:
+      this.irqCounter = (this.irqCounter & 0xff00) | (arg & 0xff);
+      break;
+
+    case this.CMD_IRQ_COUNTER_HIGH:
+      this.irqCounter = (this.irqCounter & 0x00ff) | ((arg & 0xff) << 8);
+      break;
+  }
+};
+
+Mappers[69].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("FME-7: Invalid ROM! Unable to load.");
+  }
+
+  // Load fixed PRG bank (0xE000):
+  this.load8kRomBank((this.nes.rom.romCount - 1) * 2 + 1, 0xe000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+Mappers[69].prototype.loadBatteryRam = function () {
+  if (this.nes.rom.batteryRam) {
+    var ram = this.nes.rom.batteryRam;
+    if (ram !== null && ram.length === 0x2000) {
+      // Load Battery RAM into memory:
+      this.wram8K[0] = utils.copyArray(ram);
+    }
+  }
+},
+
+Mappers[69].prototype.cpuClockIrqCounter = function () {
+  if (this.irqEnableCounter) {
+    this.irqCounter--;
+    if (this.irqCounter < 0) {
+      this.irqCounter = 0xffff;
+      if (this.irqEnable) {
+        this.nes.cpu.requestIrq(this.nes.cpu.IRQ_NORMAL);
+      }
+    }
+  }
+};
+
+Mappers[69].prototype.toJSON = function () {
+  var s = Mappers[0].prototype.toJSON.apply(this);
+  s.command = this.command;
+  s.mirroring = this.mirroring;
+  s.irqCounter = this.irqCounter;
+  s.irqEnable = this.irqEnable;
+  s.irqEnableCounter = this.irqEnableCounter;
+  s.wramSelect = this.wramSelect;
+  s.wramBank = this.wramBank;
+  s.wram8K = this.wram8K;
+  return s;
+};
+
+Mappers[69].prototype.fromJSON = function (s) {
+  Mappers[0].prototype.fromJSON.apply(this, arguments);
+  this.command = s.command;
+  this.mirroring = s.mirroring;
+  this.irqCounter = s.irqCounter;
+  this.irqEnable = s.irqEnable;
+  this.irqEnableCounter = s.irqEnableCounter;
+  this.wramSelect = s.wramSelect;
+  this.wramBank = s.wramBank;
+  this.wram8K = s.wram8K;
+};
+
+/**
  * Mapper 073 (Konami VRC3)
  *
  * @description http://wiki.nesdev.com/w/index.php/VRC3
@@ -1613,6 +1876,15 @@ Mappers[66].prototype.write = function (address, value) {
 };
 
 Mappers[73].prototype = new Mappers[0]();
+
+Mappers[73].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+};
 
 Mappers[73].prototype.write = function (address, value) {
   if (address < 0x8000) {
@@ -1656,7 +1928,7 @@ Mappers[73].prototype.write = function (address, value) {
 
 Mappers[73].prototype.loadROM = function () {
   if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
-    throw new Error("Konami VRC3: Invalid ROM! Unable to load.");
+    throw new Error("VRC3: Invalid ROM! Unable to load.");
   }
 
   // Load hardwired PRG bank (0xC000):
@@ -1769,14 +2041,14 @@ Mappers[87].prototype.write = function (address, value) {
  */
 Mappers[89] = function (nes) {
   this.nes = nes;
-  this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORING;
+  this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGA;
 };
 
 Mappers[89].prototype = new Mappers[0]();
 
 Mappers[89].prototype.reset = function () {
   Mappers[0].prototype.reset.apply();
-  this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORING;
+  this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGA;
 }
 
 Mappers[89].prototype.write = function (address, value) {
@@ -1791,9 +2063,9 @@ Mappers[89].prototype.write = function (address, value) {
     this.load8kVromBank((value & 7) * 2, 0x0000);
 
     if ((address & 8) !== 0) {
-      this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORING;
+      this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGA;
     } else {
-      this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORING2;
+      this.mirroring = this.nes.rom.SINGLESCREEN_MIRRORINGB;
     }
     this.nes.ppu.setMirroring(this.mirroring);
   }
@@ -1881,7 +2153,7 @@ Mappers[97].prototype.write = function (address, value) {
     return;
   } else {
     this.loadRomBank((value & 0x1f), 0xc000);
-    let m = ((value >> 7) & 1) !== 1;
+    var m = ((value >> 7) & 1) !== 1;
     if (this.mirroring !== m) {
       this.nes.ppu.setMirroring(m);
       this.mirroring = m;
@@ -1953,6 +2225,16 @@ Mappers[140].prototype.write = function (address, value) {
 };
 
 Mappers[142].prototype = new Mappers[0]();
+
+Mappers[142].prototype.reset = function () {
+  Mappers[0].prototype.reset.apply();
+  this.irqCounter = null;
+  this.irqLatchValue = null;
+  this.irqEnable = null;
+  this.irqMode = null;
+  this.irqEnableOnAck = null;
+  this.bankSelect = null;
+};
 
 Mappers[142].prototype.write = function (address, value) {
   if (address < 0x8000) {

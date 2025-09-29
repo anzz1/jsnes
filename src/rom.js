@@ -45,9 +45,9 @@ var ROM = function (nes) {
   this.mapperName[64] = "Tengen RAMBO-1";
   this.mapperName[65] = "Irem H-3001";
   this.mapperName[66] = "GxROM";
-  this.mapperName[67] = "SunSoft3";
-  this.mapperName[68] = "SunSoft4";
-  this.mapperName[69] = "SunSoft5";
+  this.mapperName[67] = "Sunsoft3";
+  this.mapperName[68] = "Sunsoft4";
+  this.mapperName[69] = "Sunsoft FME-7";
   this.mapperName[71] = "Camerica";
   this.mapperName[72] = "Jaleco JF-17";
   this.mapperName[73] = "Konami VRC3";
@@ -144,10 +144,10 @@ ROM.prototype = {
   VERTICAL_MIRRORING: 0,
   HORIZONTAL_MIRRORING: 1,
   FOURSCREEN_MIRRORING: 2,
-  SINGLESCREEN_MIRRORING: 3,
-  SINGLESCREEN_MIRRORING2: 4,
-  SINGLESCREEN_MIRRORING3: 5,
-  SINGLESCREEN_MIRRORING4: 6,
+  SINGLESCREEN_MIRRORINGA: 3,
+  SINGLESCREEN_MIRRORINGB: 4,
+  SINGLESCREEN_MIRRORINGC: 5,
+  SINGLESCREEN_MIRRORINGD: 6,
   CHRROM_MIRRORING: 7,
 
   header: null,

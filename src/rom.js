@@ -48,6 +48,7 @@ var ROM = function (nes) {
   this.mapperName[67] = "Sunsoft3";
   this.mapperName[68] = "Sunsoft4";
   this.mapperName[69] = "Sunsoft FME-7";
+  this.mapperName[70] = "Mapper070";
   this.mapperName[71] = "Camerica";
   this.mapperName[72] = "Jaleco JF-17";
   this.mapperName[73] = "Konami VRC3";

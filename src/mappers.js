@@ -2481,6 +2481,49 @@ Mappers[69].prototype.fromJSON = function (s) {
 };
 
 /**
+ * Mapper 070
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_070
+ * @example Family Trainer - Meiro Daisakusen, Kamen Rider Club
+ * @constructor
+ */
+ Mappers[70] = function(nes) {
+  this.nes = nes;
+};
+
+Mappers[70].prototype = new Mappers[0]();
+
+Mappers[70].prototype.write = function(address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+  } else {
+    this.loadRomBank(((value >> 4) & 0xf), 0x8000);
+    this.load8kVromBank(value & 0xf, 0x0000);
+  }
+};
+
+Mappers[70].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("Mapper070: Invalid ROM! Unable to load.");
+  }
+
+  // Load swappable PRG-ROM bank
+  this.loadRomBank(0, 0x8000);
+
+  // Load fixed PRG-ROM bank
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
  * Mapper 073 (Konami VRC3)
  *
  * @description http://wiki.nesdev.com/w/index.php/VRC3

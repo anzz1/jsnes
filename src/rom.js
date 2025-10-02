@@ -97,6 +97,7 @@ var ROM = function (nes) {
   this.mapperName[148] = "Tengen 800008";
   this.mapperName[149] = "Sachen SA-0036";
   this.mapperName[150] = "Sachen SA-015";
+  this.mapperName[152] = "Mapper152";
   this.mapperName[153] = "Bandai FCG";
   this.mapperName[154] = "NAMCOT-3453";
   this.mapperName[155] = "Nintendo MMC1B";

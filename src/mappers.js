@@ -384,13 +384,12 @@ Mappers[0].prototype = {
     }
   },
 
-  loadRomBank: function (bank, address) {
+  loadRomBank: function (bank16k, address) {
     // Loads a ROM bank into the specified address.
-    bank %= this.nes.rom.romCount;
-    //var data = this.nes.rom.rom[bank];
-    //cpuMem.write(address,data,data.length);
+    bank16k %= this.nes.rom.romCount;
+
     utils.copyArrayElements(
-      this.nes.rom.rom[bank],
+      this.nes.rom.rom[bank16k],
       0,
       this.nes.cpu.mem,
       address,
@@ -398,21 +397,42 @@ Mappers[0].prototype = {
     );
   },
 
-  loadVromBank: function (bank, address) {
+  load32kRomBank: function (bank32k, address) {
+    var bank16k = bank32k << 1;
+    this.loadRomBank(bank16k, address);
+    this.loadRomBank(bank16k + 1, address + 16384);
+  },
+
+  load8kRomBank: function (bank8k, address) {
+    var bank16k = (bank8k >> 1) % this.nes.rom.romCount;
+    var offset = (bank8k % 2) * 8192;
+
+    utils.copyArrayElements(
+      this.nes.rom.rom[bank16k],
+      offset,
+      this.nes.cpu.mem,
+      address,
+      8192
+    );
+  },
+
+  loadVromBank: function (bank4k, address) {
     if (this.nes.rom.vromCount === 0) {
       return;
     }
     this.nes.ppu.triggerRendering();
 
+    bank4k %= this.nes.rom.vromCount;
+
     utils.copyArrayElements(
-      this.nes.rom.vrom[bank % this.nes.rom.vromCount],
+      this.nes.rom.vrom[bank4k],
       0,
       this.nes.ppu.vramMem,
       address,
       4096
     );
 
-    var vromTile = this.nes.rom.vromTile[bank % this.nes.rom.vromCount];
+    var vromTile = this.nes.rom.vromTile[bank4k];
     utils.copyArrayElements(
       vromTile,
       0,
@@ -422,46 +442,15 @@ Mappers[0].prototype = {
     );
   },
 
-  load32kRomBank: function (bank, address) {
-    this.loadRomBank((bank * 2) % this.nes.rom.romCount, address);
-    this.loadRomBank((bank * 2 + 1) % this.nes.rom.romCount, address + 16384);
-  },
-
-  load8kVromBank: function (bank4kStart, address) {
+  load8kVromBank: function (bank8k, address) {
     if (this.nes.rom.vromCount === 0) {
       return;
     }
     this.nes.ppu.triggerRendering();
 
-    this.loadVromBank(bank4kStart % this.nes.rom.vromCount, address);
-    this.loadVromBank(
-      (bank4kStart + 1) % this.nes.rom.vromCount,
-      address + 4096
-    );
-  },
-
-  load1kVromBank: function (bank1k, address) {
-    if (this.nes.rom.vromCount === 0) {
-      return;
-    }
-    this.nes.ppu.triggerRendering();
-
-    var bank4k = Math.floor(bank1k / 4) % this.nes.rom.vromCount;
-    var bankoffset = (bank1k % 4) * 1024;
-    utils.copyArrayElements(
-      this.nes.rom.vrom[bank4k],
-      bankoffset,
-      this.nes.ppu.vramMem,
-      address,
-      1024
-    );
-
-    // Update tiles:
-    var vromTile = this.nes.rom.vromTile[bank4k];
-    var baseIndex = address >> 4;
-    for (var i = 0; i < 64; i++) {
-      this.nes.ppu.ptTile[baseIndex + i] = vromTile[(bank1k % 4 << 6) + i];
-    }
+    var bank4k = (bank8k << 1) % this.nes.rom.vromCount;
+    this.loadVromBank(bank4k, address);
+    this.loadVromBank((bank4k + 1), address + 4096);
   },
 
   load2kVromBank: function (bank2k, address) {
@@ -470,7 +459,7 @@ Mappers[0].prototype = {
     }
     this.nes.ppu.triggerRendering();
 
-    var bank4k = Math.floor(bank2k / 2) % this.nes.rom.vromCount;
+    var bank4k = (bank2k >> 1) % this.nes.rom.vromCount;
     var bankoffset = (bank2k % 2) * 2048;
     utils.copyArrayElements(
       this.nes.rom.vrom[bank4k],
@@ -488,18 +477,28 @@ Mappers[0].prototype = {
     }
   },
 
-  load8kRomBank: function (bank8k, address) {
-    var bank16k = Math.floor(bank8k / 2) % this.nes.rom.romCount;
-    var offset = (bank8k % 2) * 8192;
+  load1kVromBank: function (bank1k, address) {
+    if (this.nes.rom.vromCount === 0) {
+      return;
+    }
+    this.nes.ppu.triggerRendering();
 
-    //this.nes.cpu.mem.write(address,this.nes.rom.rom[bank16k],offset,8192);
+    var bank4k = (bank1k >> 2) % this.nes.rom.vromCount;
+    var bankoffset = (bank1k % 4) * 1024;
     utils.copyArrayElements(
-      this.nes.rom.rom[bank16k],
-      offset,
-      this.nes.cpu.mem,
+      this.nes.rom.vrom[bank4k],
+      bankoffset,
+      this.nes.ppu.vramMem,
       address,
-      8192
+      1024
     );
+
+    // Update tiles:
+    var vromTile = this.nes.rom.vromTile[bank4k];
+    var baseIndex = address >> 4;
+    for (var i = 0; i < 64; i++) {
+      this.nes.ppu.ptTile[baseIndex + i] = vromTile[(bank1k % 4 << 6) + i];
+    }
   },
 
   ppuClockIrqCounter: function () {
@@ -656,10 +655,10 @@ Mappers[1].prototype.setReg = function (reg, value) {
         if (this.vromSwitchingSize === 0) {
           // Swap 8kB VROM:
           if (this.romSelectionReg0 === 0) {
-            this.load8kVromBank(value & 0xf, 0x0000);
+            this.load8kVromBank((value & 0xf >> 1), 0x0000);
           } else {
             this.load8kVromBank(
-              Math.floor(this.nes.rom.vromCount / 2) + (value & 0xf),
+              (this.nes.rom.vromCount >> 1) + ((value & 0xf) >> 1),
               0x0000
             );
           }
@@ -669,7 +668,7 @@ Mappers[1].prototype.setReg = function (reg, value) {
             this.loadVromBank(value & 0xf, 0x0000);
           } else {
             this.loadVromBank(
-              Math.floor(this.nes.rom.vromCount / 2) + (value & 0xf),
+              (this.nes.rom.vromCount >> 1) + (value & 0xf),
               0x0000
             );
           }
@@ -691,7 +690,7 @@ Mappers[1].prototype.setReg = function (reg, value) {
             this.loadVromBank(value & 0xf, 0x1000);
           } else {
             this.loadVromBank(
-              Math.floor(this.nes.rom.vromCount / 2) + (value & 0xf),
+              (this.nes.rom.vromCount >> 1) + (value & 0xf),
               0x1000
             );
           }
@@ -873,7 +872,7 @@ Mappers[3].prototype.write = function (address, value) {
   } else {
     // This is a ROM bank select command.
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank(value * 2, 0x0000);
+    this.load8kVromBank(value, 0x0000);
   }
 };
 
@@ -2206,7 +2205,7 @@ Mappers[38].prototype.write = function (address, value) {
     this.load32kRomBank(value & 3, 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank(((value >> 2) & 3) * 2, 0x0000);
+    this.load8kVromBank((value >> 2) & 3, 0x0000);
   }
 };
 
@@ -2232,7 +2231,7 @@ Mappers[66].prototype.write = function (address, value) {
     this.load32kRomBank((value >> 4) & 3, 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((value & 3) * 2, 0x0000);
+    this.load8kVromBank(value & 3, 0x0000);
   }
 };
 
@@ -2612,7 +2611,7 @@ Mappers[79].prototype.write = function (address, value) {
     this.load32kRomBank((value >> 3) & 1, 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((value & 7) * 2, 0x0000);
+    this.load8kVromBank(value & 7, 0x0000);
   }
 };
 
@@ -2652,7 +2651,7 @@ Mappers[87].prototype.write = function (address, value) {
   } else {
     // This is a ROM bank select command.
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((((value & 2) >> 1) | ((value & 1) << 1)) * 2, 0x0000);
+    this.load8kVromBank(((value & 2) >> 1) | ((value & 1) << 1), 0x0000);
   }
 };
 
@@ -2678,7 +2677,7 @@ Mappers[89].prototype.write = function (address, value) {
     this.loadRomBank(((value >> 4) & 3), 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((value & 7) * 2, 0x0000);
+    this.load8kVromBank(value & 7, 0x0000);
 
     if ((address & 8) !== 0) {
       this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
@@ -2806,7 +2805,7 @@ Mappers[140].prototype.write = function (address, value) {
     this.load32kRomBank((value >> 4) & 3, 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((value & 0xf) * 2, 0x0000);
+    this.load8kVromBank(value & 0xf, 0x0000);
   }
 };
 
@@ -2961,7 +2960,7 @@ Mappers[145].prototype.write = function (address, value) {
     return;
   } else {
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank(((value & 0x80) >> 7) * 2, 0x0000);
+    this.load8kVromBank((value & 0x80) >> 7, 0x0000);
   }
 };
 
@@ -3013,7 +3012,7 @@ Mappers[148].prototype.write = function (address, value) {
     this.load32kRomBank((value >> 3) & 1, 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((value & 7) * 2, 0x0000);
+    this.load8kVromBank(value & 7, 0x0000);
   }
   Mappers[0].prototype.write.apply(this, arguments);
 };
@@ -3028,6 +3027,54 @@ Mappers[148].prototype.loadROM = function () {
 
   // Load CHR-ROM:
   this.loadCHRROM();
+
+  // Do Reset-Interrupt:
+  this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
+};
+
+/**
+ * Mapper 152
+ *
+ * @description http://wiki.nesdev.com/w/index.php/INES_Mapper_152
+ * @example Arkanoid 2, Gegege no Kitarou 2
+ * @constructor
+ */
+ Mappers[152] = function(nes) {
+  this.nes = nes;
+};
+
+Mappers[152].prototype = new Mappers[0]();
+
+Mappers[152].prototype.write = function(address, value) {
+  if (address < 0x8000) {
+    Mappers[0].prototype.write.apply(this, arguments);
+  } else {
+    this.loadRomBank(((value >> 4) & 0x7), 0x8000);
+    this.load8kVromBank(value & 0xf, 0x0000);
+    if ((value >> 7) & 1) {
+      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGB);
+    } else {
+      this.nes.ppu.setMirroring(this.nes.rom.SINGLESCREEN_MIRRORINGA);
+    }
+  }
+};
+
+Mappers[152].prototype.loadROM = function () {
+  if (!this.nes.rom.valid || this.nes.rom.romCount < 1) {
+    throw new Error("Mapper152: Invalid ROM! Unable to load.");
+  }
+
+  // Load swappable PRG-ROM bank
+  this.loadRomBank(0, 0x8000);
+
+  // Load fixed PRG-ROM bank
+  this.loadRomBank(this.nes.rom.romCount - 1, 0xc000);
+
+  // Load CHR-ROM:
+  this.loadCHRROM();
+
+  // Load Battery RAM (if present):
+  this.loadBatteryRam();
 
   // Do Reset-Interrupt:
   this.nes.cpu.requestIrq(this.nes.cpu.IRQ_RESET);
@@ -3095,7 +3142,7 @@ Mappers[240].prototype.write = function(address, value) {
     this.load32kRomBank((value >> 4) & 3, 0x8000);
 
     // Swap in the given VROM bank at 0x0000:
-    this.load8kVromBank((value & 0xf) * 2, 0x0000);
+    this.load8kVromBank(value & 0xf, 0x0000);
   }
 };
 
